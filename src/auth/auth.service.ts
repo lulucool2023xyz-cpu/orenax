@@ -15,7 +15,12 @@ export class AuthService {
     ) { }
 
     async register(registerDto: RegisterDto) {
-        const { email, password, name } = registerDto;
+        const { email, password, name, fullName } = registerDto;
+        const finalName = name || fullName;
+
+        if (!finalName) {
+            throw new BadRequestException('Name is required');
+        }
 
         try {
             // Try to use Admin client to auto-confirm user
@@ -26,7 +31,7 @@ export class AuthService {
                 email,
                 password,
                 email_confirm: true, // Auto confirm email
-                user_metadata: { name }
+                user_metadata: { name: finalName }
             });
 
             if (adminError) {
@@ -74,7 +79,7 @@ export class AuthService {
                     email,
                     password,
                     options: {
-                        data: { name },
+                        data: { name: finalName },
                     },
                 });
 
