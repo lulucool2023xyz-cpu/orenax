@@ -1,445 +1,780 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OrenaX API Portal</title>
+    <title>OrenaX Ultimate API Playground</title>
+
+    <!-- Libraries -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .gradient-text {
-            background: linear-gradient(to right, #60A5FA, #A78BFA);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+        body {
+            font-family: 'Inter', sans-serif;
         }
-        .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
         }
-        pre { margin: 0; }
+
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .fade-enter-active,
+        .fade-leave-active {
+            transition: opacity 0.2s ease;
+        }
+
+        .fade-enter-from,
+        .fade-leave-to {
+            opacity: 0;
+        }
+
+        pre code.hljs {
+            background: transparent;
+            padding: 0;
+        }
+
+        /* Markdown Styles */
+        .prose h1 {
+            font-size: 1.5em;
+            font-weight: 700;
+            margin-bottom: 0.5em;
+            color: #e2e8f0;
+        }
+
+        .prose h2 {
+            font-size: 1.25em;
+            font-weight: 600;
+            margin-bottom: 0.5em;
+            margin-top: 1em;
+            color: #e2e8f0;
+        }
+
+        .prose p {
+            margin-bottom: 0.75em;
+            line-height: 1.6;
+            color: #cbd5e1;
+        }
+
+        .prose ul {
+            list-style-type: disc;
+            padding-left: 1.5em;
+            margin-bottom: 0.75em;
+            color: #cbd5e1;
+        }
+
+        .prose ol {
+            list-style-type: decimal;
+            padding-left: 1.5em;
+            margin-bottom: 0.75em;
+            color: #cbd5e1;
+        }
+
+        .prose code {
+            background: #1e293b;
+            padding: 0.2em 0.4em;
+            border-radius: 0.25em;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+            color: #93c5fd;
+        }
+
+        .prose pre {
+            background: #0f172a;
+            padding: 1em;
+            border-radius: 0.5em;
+            overflow-x: auto;
+            margin-bottom: 1em;
+            border: 1px solid #1e293b;
+        }
+
+        .prose pre code {
+            background: transparent;
+            padding: 0;
+            color: inherit;
+        }
+
+        .prose blockquote {
+            border-left: 4px solid #3b82f6;
+            padding-left: 1em;
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        .prose table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1em;
+        }
+
+        .prose th,
+        .prose td {
+            border: 1px solid #334155;
+            padding: 0.5em;
+            text-align: left;
+        }
+
+        .prose th {
+            background: #1e293b;
+        }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-200 min-h-screen">
 
-    <!-- Navbar -->
-    <nav class="border-b border-slate-800 bg-slate-900/80 backdrop-blur fixed w-full z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-white">O</div>
-                    <span class="font-bold text-xl tracking-tight">OrenaX <span class="text-slate-500 font-normal">API</span></span>
-                </div>
-                <div class="flex items-center gap-4">
-                    <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs">
-                        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                        <span id="server-status">Checking...</span>
-                    </div>
-                    <a href="/docs/gemini-api-v2/API-REFERENCE.md" target="_blank" class="text-sm text-slate-400 hover:text-white transition-colors">Full Docs</a>
-                </div>
-            </div>
-        </div>
-    </nav>
+<body class="bg-slate-950 text-slate-200 h-screen overflow-hidden">
+    <div id="app" class="h-full flex flex-col">
 
-    <!-- Main Content -->
-    <main class="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        
-        <!-- Hero -->
-        <div class="text-center mb-12">
-            <h1 class="text-4xl sm:text-5xl font-bold mb-4">
-                The Next Gen <span class="gradient-text">AI Backend</span>
-            </h1>
-            <p class="text-slate-400 max-w-2xl mx-auto text-lg">
-                Powered by Google Gemini 2.5, Vertex AI, and Supabase. 
-                Test endpoints directly from this dashboard.
-            </p>
-            <div class="mt-6 flex justify-center gap-2 text-sm font-mono text-slate-500 bg-slate-950/50 py-2 px-4 rounded-lg inline-block border border-slate-800">
-                Base URL: <span id="base-url" class="text-blue-400">...</span>
-            </div>
-        </div>
-
-        <!-- Testing Console -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            
-            <!-- Sidebar / Menu -->
-            <div class="lg:col-span-3 space-y-4">
-                <div class="glass-panel rounded-xl p-4">
-                    <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Playground</h3>
-                    <div class="space-y-1">
-                        <button onclick="switchTab('chat')" class="tab-btn w-full text-left px-3 py-2 rounded-lg text-sm font-medium bg-blue-600/20 text-blue-400 border border-blue-500/30 transition-all" data-tab="chat">
-                            💬 Gemini Chat
-                        </button>
-                        <button onclick="switchTab('image')" class="tab-btn w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-all" data-tab="image">
-                            🖼️ Image Generation
-                        </button>
-                        <button onclick="switchTab('health')" class="tab-btn w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-all" data-tab="health">
-                            💓 Health Check
-                        </button>
-                    </div>
-                </div>
-
-                <div class="glass-panel rounded-xl p-4">
-                    <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Available Models</h3>
-                    <div id="models-list" class="space-y-2 text-xs text-slate-400">
-                        <div class="animate-pulse">Loading models...</div>
-                    </div>
-                </div>
+        <!-- Header -->
+        <header
+            class="h-14 border-b border-slate-800 bg-slate-900/80 backdrop-blur flex items-center justify-between px-6 shrink-0 z-50">
+            <div class="flex items-center gap-3">
+                <div
+                    class="w-8 h-8 rounded bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-900/20">
+                    O</div>
+                <h1 class="font-bold text-lg tracking-tight">OrenaX <span
+                        class="text-slate-500 font-normal">Playground</span></h1>
+                <span
+                    class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400 border border-slate-700">{{
+                    baseUrl }}</span>
             </div>
 
-            <!-- Main Panel -->
-            <div class="lg:col-span-9">
-                
-                <!-- Chat Tab -->
-                <div id="chat-tab" class="tab-content space-y-6">
-                    <div class="glass-panel rounded-xl p-6">
-                        <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-xl font-bold flex items-center gap-2">
-                                💬 Gemini Chat Playground
-                                <span class="px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30">v2</span>
+            <div class="flex items-center gap-4">
+                <!-- Health Status -->
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs transition-colors"
+                    :class="healthStatus === 'ok' ? 'border-green-900/50 bg-green-900/10' : 'border-red-900/50 bg-red-900/10'">
+                    <div class="w-2 h-2 rounded-full animate-pulse"
+                        :class="healthStatus === 'ok' ? 'bg-green-500' : 'bg-red-500'"></div>
+                    <span :class="healthStatus === 'ok' ? 'text-green-400' : 'text-red-400'">{{ healthStatus === 'ok' ?
+                        'System Online' : 'System Offline' }}</span>
+                </div>
+
+                <!-- User Profile -->
+                <div v-if="user" class="flex items-center gap-3 pl-4 border-l border-slate-800">
+                    <div class="text-right hidden sm:block">
+                        <div class="text-xs font-medium text-white">{{ user.fullName || 'User' }}</div>
+                        <div class="text-[10px] text-slate-500">{{ user.email }}</div>
+                    </div>
+                    <button @click="logout"
+                        class="p-2 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
+                        title="Logout">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
+                            </path>
+                        </svg>
+                    </button>
+                </div>
+                <div v-else>
+                    <button @click="activeTab = 'auth'"
+                        class="text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors shadow-lg shadow-blue-900/20">
+                        Login / Register
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex-1 flex overflow-hidden">
+            <!-- Sidebar -->
+            <aside class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 overflow-y-auto">
+                <div class="p-4 space-y-6">
+
+                    <!-- Auth Section -->
+                    <div v-if="!user">
+                        <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 px-2">Authentication
+                        </div>
+                        <button @click="activeTab = 'auth'"
+                            :class="{'bg-blue-600/10 text-blue-400 border-blue-500/20': activeTab === 'auth'}"
+                            class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-all border border-transparent">
+                            🔐 Login & Register
+                        </button>
+                    </div>
+
+                    <!-- Gemini Section -->
+                    <div>
+                        <div
+                            class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 px-2 flex justify-between items-center">
+                            <span>Gemini API v2</span>
+                            <span class="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 rounded">New</span>
+                        </div>
+                        <div class="space-y-1">
+                            <button v-for="item in menu.gemini" :key="item.id" @click="activeTab = item.id"
+                                :class="{'bg-blue-600/10 text-blue-400 border-blue-500/20': activeTab === item.id}"
+                                class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-all border border-transparent flex items-center gap-2">
+                                <span>{{ item.icon }}</span> {{ item.label }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Vertex AI Section -->
+                    <div>
+                        <div
+                            class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 px-2 flex justify-between items-center">
+                            <span>Vertex AI Image</span>
+                            <span v-if="!user" class="text-[10px] bg-slate-800 text-slate-500 px-1.5 rounded">Auth
+                                Req</span>
+                        </div>
+                        <div class="space-y-1" :class="{'opacity-50 pointer-events-none': !user}">
+                            <button v-for="item in menu.vertex" :key="item.id" @click="activeTab = item.id"
+                                :class="{'bg-purple-600/10 text-purple-400 border-purple-500/20': activeTab === item.id}"
+                                class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-all border border-transparent flex items-center gap-2">
+                                <span>{{ item.icon }}</span> {{ item.label }}
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 overflow-y-auto bg-slate-950 relative">
+
+                <!-- Auth View -->
+                <div v-if="activeTab === 'auth'" class="max-w-md mx-auto mt-20 px-6">
+                    <div class="glass rounded-2xl p-8 shadow-2xl">
+                        <h2 class="text-2xl font-bold mb-6 text-center">{{ authMode === 'login' ? 'Welcome Back' :
+                            'Create Account' }}</h2>
+
+                        <div class="space-y-4">
+                            <div v-if="authMode === 'register'">
+                                <label class="block text-xs font-medium text-slate-400 mb-1">Full Name</label>
+                                <input v-model="authForm.fullName" type="text"
+                                    class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-400 mb-1">Email Address</label>
+                                <input v-model="authForm.email" type="email"
+                                    class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-400 mb-1">Password</label>
+                                <input v-model="authForm.password" type="password"
+                                    class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+
+                            <button @click="handleAuth" :disabled="isLoading"
+                                class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-lg transition-all flex justify-center items-center gap-2 mt-2">
+                                <span v-if="isLoading" class="animate-spin">⌛</span>
+                                {{ authMode === 'login' ? 'Sign In' : 'Sign Up' }}
+                            </button>
+
+                            <div class="text-center text-sm text-slate-500 mt-4">
+                                {{ authMode === 'login' ? "Don't have an account?" : "Already have an account?" }}
+                                <button @click="authMode = authMode === 'login' ? 'register' : 'login'"
+                                    class="text-blue-400 hover:text-blue-300 font-medium ml-1">
+                                    {{ authMode === 'login' ? 'Sign Up' : 'Sign In' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dynamic Views -->
+                <div v-else class="p-6 max-w-5xl mx-auto">
+
+                    <!-- Header for current view -->
+                    <div class="mb-8 flex items-end justify-between">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                                {{ getCurrentViewTitle() }}
                             </h2>
-                            <select id="chat-model" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                                <option value="gemini-2.0-flash">gemini-2.0-flash (Fast)</option>
-                                <option value="gemini-2.5-flash">gemini-2.5-flash (Thinking)</option>
-                                <option value="gemini-2.5-pro">gemini-2.5-pro (Premium)</option>
+                            <p class="text-slate-400 text-sm mt-1">{{ getCurrentViewDesc() }}</p>
+                        </div>
+                        <!-- Model Selector for Gemini Views -->
+                        <div v-if="activeTab.startsWith('gemini')" class="flex items-center gap-2">
+                            <span class="text-xs text-slate-500">Model:</span>
+                            <select v-model="selectedModel"
+                                class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none min-w-[200px]">
+                                <option v-for="m in models" :key="m.name" :value="m.name">
+                                    {{ m.displayName }} {{ m.supportsThinking ? '(Thinking)' : '' }}
+                                </option>
                             </select>
                         </div>
-
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-400 mb-2">System Instruction (Optional)</label>
-                                <input type="text" id="chat-system" placeholder="You are a helpful assistant..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all">
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-slate-400 mb-2">Prompt</label>
-                                <textarea id="chat-prompt" rows="4" placeholder="Ask something..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono">Explain quantum computing in simple terms</textarea>
-                            </div>
-
-                            <div class="flex items-center gap-6">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="chat-stream" class="w-4 h-4 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-blue-500">
-                                    <span class="text-sm text-slate-300">Enable Streaming</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="chat-thinking" class="w-4 h-4 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-blue-500">
-                                    <span class="text-sm text-slate-300">Show Thoughts (Thinking Mode)</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="chat-search" class="w-4 h-4 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-blue-500">
-                                    <span class="text-sm text-slate-300">Google Search</span>
-                                </label>
-                            </div>
-
-                            <button onclick="sendChat()" id="chat-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-lg transition-all flex items-center justify-center gap-2">
-                                <span>Send Request</span>
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-                            </button>
-                        </div>
                     </div>
 
-                    <!-- Response Area -->
-                    <div class="glass-panel rounded-xl p-6 relative">
-                        <div class="absolute top-4 right-4 text-xs text-slate-500 font-mono" id="chat-latency"></div>
-                        <h3 class="text-sm font-semibold text-slate-400 mb-3">Response</h3>
-                        
-                        <!-- Thoughts Section -->
-                        <div id="chat-thoughts" class="hidden mb-4 p-4 bg-amber-900/10 border border-amber-500/20 rounded-lg">
-                            <div class="text-xs font-bold text-amber-500 mb-2 uppercase tracking-wider flex items-center gap-2">
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
-                                Thinking Process
-                            </div>
-                            <div id="chat-thoughts-content" class="text-sm text-amber-200/80 font-mono whitespace-pre-wrap"></div>
-                        </div>
+                    <!-- Content Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-200px)]">
 
-                        <div id="chat-response" class="min-h-[100px] text-sm text-slate-300 whitespace-pre-wrap font-mono bg-slate-950 rounded-lg p-4 border border-slate-800">
-                            Waiting for request...
-                        </div>
-                        
-                        <div id="chat-json" class="mt-4 hidden">
-                            <div class="text-xs font-semibold text-slate-500 mb-2">Raw JSON</div>
-                            <pre><code class="language-json rounded-lg text-xs" id="chat-json-content"></code></pre>
-                        </div>
-                    </div>
-                </div>
+                        <!-- Left: Input / Config -->
+                        <div class="flex flex-col gap-4 overflow-y-auto pr-2">
 
-                <!-- Image Tab -->
-                <div id="image-tab" class="tab-content hidden space-y-6">
-                    <div class="glass-panel rounded-xl p-6">
-                        <h2 class="text-xl font-bold mb-6 flex items-center gap-2">
-                            🖼️ Image Generation
-                            <span class="px-2 py-0.5 rounded text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30">Vertex AI</span>
-                        </h2>
-                        
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-400 mb-2">Prompt</label>
-                                <textarea id="image-prompt" rows="3" placeholder="A futuristic city in cyberpunk style..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none transition-all">A cute robot painting a canvas, digital art, 4k</textarea>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-400 mb-2">Model</label>
-                                    <select id="image-model" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none">
-                                        <option value="imagen-3.0-generate-001">Imagen 3.0 (Fast)</option>
-                                        <option value="imagen-3.0-fast-generate-001">Imagen 3.0 Fast</option>
-                                    </select>
+                            <!-- Chat Interface -->
+                            <div v-if="activeTab === 'gemini-chat'" class="flex-1 flex flex-col gap-4">
+                                <div
+                                    class="glass rounded-xl p-4 flex-1 overflow-y-auto space-y-4 min-h-[300px] max-h-[500px]">
+                                    <div v-if="chatHistory.length === 0" class="text-center text-slate-500 py-10">
+                                        Start a conversation...
+                                    </div>
+                                    <div v-for="(msg, idx) in chatHistory" :key="idx" class="flex flex-col gap-1"
+                                        :class="msg.role === 'user' ? 'items-end' : 'items-start'">
+                                        <div class="text-[10px] uppercase font-bold text-slate-500">{{ msg.role }}</div>
+                                        <div class="px-4 py-2 rounded-2xl max-w-[90%] text-sm"
+                                            :class="msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-slate-800 text-slate-200 rounded-tl-sm'">
+                                            <div v-if="msg.thoughts"
+                                                class="mb-2 p-2 bg-black/20 rounded text-xs font-mono text-amber-200/80 border-l-2 border-amber-500/50 whitespace-pre-wrap">
+                                                <div class="font-bold text-amber-500 mb-1 flex items-center gap-1">🧠
+                                                    THOUGHTS</div>
+                                                {{ msg.thoughts }}
+                                            </div>
+                                            <div class="prose prose-invert prose-sm max-w-none"
+                                                v-html="renderMarkdown(msg.content)"></div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-400 mb-2">Aspect Ratio</label>
-                                    <select id="image-ratio" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none">
-                                        <option value="1:1">1:1 (Square)</option>
-                                        <option value="16:9">16:9 (Landscape)</option>
-                                        <option value="9:16">9:16 (Portrait)</option>
-                                    </select>
+
+                                <div class="glass rounded-xl p-4 space-y-3">
+                                    <textarea v-model="chatInput" @keydown.ctrl.enter="sendChat" rows="3"
+                                        placeholder="Type your message (Ctrl+Enter to send)..."
+                                        class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none font-mono"></textarea>
+
+                                    <div class="flex flex-wrap gap-4 items-center justify-between">
+                                        <div class="flex gap-4">
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input v-model="config.stream" type="checkbox"
+                                                    class="rounded bg-slate-800 border-slate-700 text-blue-600">
+                                                <span class="text-xs text-slate-400">Stream</span>
+                                            </label>
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input v-model="config.thinking" type="checkbox"
+                                                    class="rounded bg-slate-800 border-slate-700 text-blue-600">
+                                                <span class="text-xs text-slate-400">Thinking</span>
+                                            </label>
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input v-model="config.googleSearch" type="checkbox"
+                                                    class="rounded bg-slate-800 border-slate-700 text-blue-600">
+                                                <span class="text-xs text-slate-400">Google Search</span>
+                                            </label>
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input v-model="config.codeExecution" type="checkbox"
+                                                    class="rounded bg-slate-800 border-slate-700 text-blue-600">
+                                                <span class="text-xs text-slate-400">Code Exec</span>
+                                            </label>
+                                        </div>
+                                        <button @click="sendChat" :disabled="isLoading || !chatInput.trim()"
+                                            class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors">
+                                            {{ isLoading ? 'Sending...' : 'Send' }}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
-                            <button onclick="generateImage()" id="image-btn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium py-2.5 rounded-lg transition-all">
-                                Generate Image
-                            </button>
-                        </div>
-                    </div>
+                            <!-- Simple Prompt Interface -->
+                            <div v-if="activeTab === 'gemini-simple'" class="space-y-4">
+                                <div class="glass rounded-xl p-6 space-y-4">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-400 mb-2">Prompt</label>
+                                        <textarea v-model="simplePrompt" rows="6"
+                                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"></textarea>
+                                    </div>
+                                    <button @click="sendSimple" :disabled="isLoading"
+                                        class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg font-medium transition-colors">
+                                        Generate
+                                    </button>
+                                </div>
+                            </div>
 
-                    <div class="glass-panel rounded-xl p-6">
-                        <h3 class="text-sm font-semibold text-slate-400 mb-3">Result</h3>
-                        <div id="image-result" class="min-h-[200px] flex items-center justify-center bg-slate-950 rounded-lg border border-slate-800 border-dashed">
-                            <span class="text-slate-600 text-sm">Generated image will appear here</span>
+                            <!-- Image Gen Interface -->
+                            <div v-if="activeTab === 'vertex-image'" class="space-y-4">
+                                <div class="glass rounded-xl p-6 space-y-4">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-400 mb-2">Prompt</label>
+                                        <textarea v-model="imageForm.prompt" rows="4"
+                                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none font-mono"
+                                            placeholder="A futuristic city..."></textarea>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-400 mb-2">Aspect
+                                                Ratio</label>
+                                            <select v-model="imageForm.aspectRatio"
+                                                class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+                                                <option value="1:1">1:1 (Square)</option>
+                                                <option value="16:9">16:9 (Landscape)</option>
+                                                <option value="9:16">9:16 (Portrait)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-400 mb-2">Samples</label>
+                                            <select v-model="imageForm.sampleCount"
+                                                class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+                                                <option :value="1">1 Image</option>
+                                                <option :value="2">2 Images</option>
+                                                <option :value="4">4 Images</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <button @click="generateImage" :disabled="isLoading"
+                                        class="w-full bg-purple-600 hover:bg-purple-500 text-white py-2.5 rounded-lg font-medium transition-colors">
+                                        {{ isLoading ? 'Generating...' : 'Generate Image' }}
+                                    </button>
+                                </div>
+                            </div>
+
                         </div>
+
+                        <!-- Right: Output / JSON -->
+                        <div class="flex flex-col gap-4 overflow-hidden">
+                            <div class="glass rounded-xl flex-1 flex flex-col overflow-hidden border border-slate-800">
+                                <div
+                                    class="px-4 py-2 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
+                                    <span class="text-xs font-bold text-slate-500 uppercase">Response / Logs</span>
+                                    <button @click="logs = []"
+                                        class="text-[10px] text-slate-500 hover:text-white">Clear</button>
+                                </div>
+                                <div class="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-xs">
+                                    <div v-if="logs.length === 0" class="text-slate-600 text-center mt-10">
+                                        No requests yet.
+                                    </div>
+                                    <div v-for="(log, idx) in logs" :key="idx" class="space-y-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold"
+                                                :class="log.type === 'req' ? 'bg-blue-900 text-blue-300' : (log.error ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300')">
+                                                {{ log.method }}
+                                            </span>
+                                            <span class="text-slate-400">{{ log.url }}</span>
+                                            <span class="text-slate-600 ml-auto">{{ log.time }}</span>
+                                        </div>
+
+                                        <!-- Request Body -->
+                                        <div v-if="log.body"
+                                            class="bg-slate-950 rounded p-2 border border-slate-800 overflow-x-auto">
+                                            <span class="text-slate-500 block mb-1">// Request Payload</span>
+                                            <pre><code class="language-json" v-html="highlight(log.body)"></code></pre>
+                                        </div>
+
+                                        <!-- Response Body -->
+                                        <div v-if="log.response"
+                                            class="bg-slate-950 rounded p-2 border border-slate-800 overflow-x-auto">
+                                            <span class="text-slate-500 block mb-1">// Response ({{ log.status
+                                                }})</span>
+
+                                            <!-- Image Preview if available -->
+                                            <div v-if="log.images && log.images.length > 0"
+                                                class="grid grid-cols-2 gap-2 mb-2">
+                                                <img v-for="(img, i) in log.images" :key="i" :src="img.url"
+                                                    class="rounded border border-slate-700 w-full h-auto">
+                                            </div>
+
+                                            <pre><code class="language-json" v-html="highlight(log.response)"></code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
-                <!-- Health Tab -->
-                <div id="health-tab" class="tab-content hidden space-y-6">
-                    <div class="glass-panel rounded-xl p-6">
-                        <h2 class="text-xl font-bold mb-6">System Health</h2>
-                        <button onclick="checkHealth()" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm mb-4">Refresh Status</button>
-                        <pre><code class="language-json rounded-lg" id="health-json">Click refresh to check status...</code></pre>
-                    </div>
-                </div>
-
-            </div>
+            </main>
         </div>
-    </main>
+    </div>
 
     <script>
-        // Configuration
-        const BASE_URL = window.location.origin;
-        document.getElementById('base-url').textContent = BASE_URL;
+        const { createApp, ref, reactive, onMounted, computed, watch } = Vue;
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            checkHealth();
-            fetchModels();
-            hljs.highlightAll();
-        });
+        createApp({
+            setup() {
+                // State
+                const baseUrl = window.location.origin;
+                const user = ref(null);
+                const token = ref(localStorage.getItem('token'));
+                const activeTab = ref('gemini-chat');
+                const healthStatus = ref('checking');
+                const isLoading = ref(false);
+                const models = ref([]);
+                const selectedModel = ref('gemini-2.0-flash');
+                const logs = ref([]);
 
-        // Tab Switching
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.getElementById(`${tabName}-tab`).classList.remove('hidden');
-            
-            document.querySelectorAll('.tab-btn').forEach(el => {
-                el.classList.remove('bg-blue-600/20', 'text-blue-400', 'border', 'border-blue-500/30');
-                el.classList.add('text-slate-400', 'hover:bg-slate-800');
-            });
-            
-            const activeBtn = document.querySelector(`button[data-tab="${tabName}"]`);
-            activeBtn.classList.remove('text-slate-400', 'hover:bg-slate-800');
-            activeBtn.classList.add('bg-blue-600/20', 'text-blue-400', 'border', 'border-blue-500/30');
-        }
+                // Forms
+                const authMode = ref('login');
+                const authForm = reactive({ email: '', password: '', fullName: '' });
 
-        // API Functions
-        async function checkHealth() {
-            try {
-                const res = await fetch(`${BASE_URL}/api/v2/health`);
-                const data = await res.json();
-                
-                document.getElementById('health-json').textContent = JSON.stringify(data, null, 2);
-                hljs.highlightElement(document.getElementById('health-json'));
-
-                const statusEl = document.getElementById('server-status');
-                if (data.status === 'ok') {
-                    statusEl.textContent = 'Online';
-                    statusEl.classList.add('text-green-400');
-                } else {
-                    statusEl.textContent = 'Issues Detected';
-                    statusEl.classList.add('text-red-400');
-                }
-            } catch (e) {
-                document.getElementById('server-status').textContent = 'Offline';
-            }
-        }
-
-        async function fetchModels() {
-            try {
-                const res = await fetch(`${BASE_URL}/api/v2/models`);
-                const data = await res.json();
-                const list = document.getElementById('models-list');
-                list.innerHTML = '';
-                
-                data.models.forEach(model => {
-                    const div = document.createElement('div');
-                    div.className = 'p-2 rounded bg-slate-800/50 border border-slate-700/50';
-                    div.innerHTML = `
-                        <div class="font-medium text-slate-300">${model.displayName}</div>
-                        <div class="text-[10px] text-slate-500 font-mono">${model.name}</div>
-                        ${model.supportsThinking ? '<span class="inline-block mt-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[10px]">Thinking</span>' : ''}
-                    `;
-                    list.appendChild(div);
+                const chatInput = ref('');
+                const chatHistory = ref([]);
+                const config = reactive({
+                    stream: false,
+                    thinking: false,
+                    googleSearch: false,
+                    codeExecution: false
                 });
-            } catch (e) {
-                document.getElementById('models-list').innerHTML = '<div class="text-red-400">Failed to load models</div>';
-            }
-        }
 
-        async function sendChat() {
-            const btn = document.getElementById('chat-btn');
-            const responseEl = document.getElementById('chat-response');
-            const jsonEl = document.getElementById('chat-json-content');
-            const thoughtsContainer = document.getElementById('chat-thoughts');
-            const thoughtsContent = document.getElementById('chat-thoughts-content');
-            
-            const prompt = document.getElementById('chat-prompt').value;
-            const model = document.getElementById('chat-model').value;
-            const system = document.getElementById('chat-system').value;
-            const stream = document.getElementById('chat-stream').checked;
-            const thinking = document.getElementById('chat-thinking').checked;
-            const search = document.getElementById('chat-search').checked;
+                const simplePrompt = ref('');
 
-            // Reset UI
-            btn.disabled = true;
-            btn.innerHTML = '<span class="animate-spin">⌛</span> Processing...';
-            responseEl.textContent = '';
-            thoughtsContent.textContent = '';
-            thoughtsContainer.classList.add('hidden');
-            document.getElementById('chat-json').classList.add('hidden');
+                const imageForm = reactive({
+                    prompt: '',
+                    aspectRatio: '1:1',
+                    sampleCount: 1
+                });
 
-            const payload = {
-                prompt,
-                model,
-                stream,
-                ...(system && { systemInstruction: system }),
-                ...(thinking && { thinkingConfig: { includeThoughts: true, thinkingBudget: 4096 } }),
-                ...(search && { tools: [{ googleSearch: {} }] })
-            };
+                // Menu Config
+                const menu = {
+                    gemini: [
+                        { id: 'gemini-chat', label: 'Chat & Tools', icon: '💬' },
+                        { id: 'gemini-simple', label: 'Simple Prompt', icon: '⚡' },
+                        { id: 'gemini-tokens', label: 'Token Counter', icon: '🔢' },
+                    ],
+                    vertex: [
+                        { id: 'vertex-image', label: 'Text to Image', icon: '🖼️' },
+                        { id: 'vertex-upscale', label: 'Upscale', icon: '🔍' },
+                        { id: 'vertex-edit', label: 'Image Edit', icon: '🎨' },
+                    ]
+                };
 
-            const startTime = Date.now();
+                // Helpers
+                const highlight = (json) => {
+                    if (typeof json !== 'string') json = JSON.stringify(json, null, 2);
+                    return hljs.highlight(json, { language: 'json' }).value;
+                };
 
-            try {
-                if (stream) {
-                    const response = await fetch(`${BASE_URL}/api/v2/chat/stream`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
+                const renderMarkdown = (text) => {
+                    return marked.parse(text);
+                };
+
+                const addLog = (type, method, url, body, response, status, images = []) => {
+                    logs.value.unshift({
+                        type, method, url, body, response, status, images,
+                        time: new Date().toLocaleTimeString(),
+                        error: status >= 400
                     });
+                };
 
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
+                const apiCall = async (endpoint, method = 'GET', body = null, streamCallback = null) => {
+                    isLoading.value = true;
+                    const url = `${baseUrl}${endpoint}`;
+                    const headers = { 'Content-Type': 'application/json' };
+                    if (token.value) headers['Authorization'] = `Bearer ${token.value}`;
 
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        
-                        const chunk = decoder.decode(value);
-                        const lines = chunk.split('\n');
-                        
-                        for (const line of lines) {
-                            if (line.startsWith('data: ')) {
-                                const dataStr = line.replace('data: ', '');
-                                if (dataStr === '[DONE]') break;
-                                
-                                try {
-                                    const data = JSON.parse(dataStr);
-                                    
-                                    // Handle thoughts
-                                    if (data.thought) {
-                                        thoughtsContainer.classList.remove('hidden');
-                                        thoughtsContent.textContent += data.thought;
-                                    }
-                                    
-                                    // Handle text
-                                    if (data.text) {
-                                        responseEl.textContent += data.text;
-                                    }
-                                } catch (e) {}
+                    addLog('req', method, endpoint, body, null, 'PENDING');
+
+                    try {
+                        const res = await fetch(url, {
+                            method,
+                            headers,
+                            body: body ? JSON.stringify(body) : null
+                        });
+
+                        if (streamCallback && res.ok) {
+                            const reader = res.body.getReader();
+                            const decoder = new TextDecoder();
+                            let fullText = '';
+
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                const chunk = decoder.decode(value);
+                                streamCallback(chunk);
+                                fullText += chunk;
                             }
+
+                            addLog('res', method, endpoint, body, { streamed: true, length: fullText.length }, res.status);
+                            return { success: true };
                         }
+
+                        const data = await res.json();
+
+                        // Check for images in response
+                        let images = [];
+                        if (data.images) images = data.images;
+
+                        addLog('res', method, endpoint, body, data, res.status, images);
+
+                        if (!res.ok) throw new Error(data.message || 'Request failed');
+                        return data;
+                    } catch (e) {
+                        addLog('res', method, endpoint, body, { error: e.message }, 500);
+                        throw e;
+                    } finally {
+                        isLoading.value = false;
                     }
-                } else {
-                    const response = await fetch(`${BASE_URL}/api/v2/chat/generate`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    const data = await response.json();
-                    
-                    // Show thoughts if any
-                    if (data.thoughts && data.thoughts.length > 0) {
-                        thoughtsContainer.classList.remove('hidden');
-                        thoughtsContent.textContent = data.thoughts.join('\n');
+                };
+
+                // Actions
+                const checkHealth = async () => {
+                    try {
+                        const data = await apiCall('/api/v2/health');
+                        healthStatus.value = data.status;
+                    } catch (e) {
+                        healthStatus.value = 'error';
                     }
+                };
 
-                    responseEl.textContent = data.text;
-                    jsonEl.textContent = JSON.stringify(data, null, 2);
-                    document.getElementById('chat-json').classList.remove('hidden');
-                    hljs.highlightElement(jsonEl);
-                }
-            } catch (e) {
-                responseEl.textContent = `Error: ${e.message}`;
-                responseEl.classList.add('text-red-400');
-            } finally {
-                const latency = Date.now() - startTime;
-                document.getElementById('chat-latency').textContent = `${latency}ms`;
-                btn.disabled = false;
-                btn.innerHTML = '<span>Send Request</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>';
-            }
-        }
+                const fetchModels = async () => {
+                    try {
+                        const data = await apiCall('/api/v2/models');
+                        models.value = data.models;
+                        // Set default model if available
+                        if (data.defaultModel) selectedModel.value = data.defaultModel;
+                    } catch (e) { }
+                };
 
-        async function generateImage() {
-            const btn = document.getElementById('image-btn');
-            const resultEl = document.getElementById('image-result');
-            const prompt = document.getElementById('image-prompt').value;
-            const model = document.getElementById('image-model').value;
+                const handleAuth = async () => {
+                    try {
+                        const endpoint = authMode.value === 'login' ? '/auth/login' : '/auth/register';
+                        const data = await apiCall(endpoint, 'POST', authForm);
 
-            btn.disabled = true;
-            btn.textContent = 'Generating... (This may take 10-20s)';
-            resultEl.innerHTML = '<div class="animate-pulse text-purple-400">Creating masterpiece...</div>';
+                        if (data.accessToken) {
+                            token.value = data.accessToken;
+                            localStorage.setItem('token', data.accessToken);
+                            await fetchUser();
+                            activeTab.value = 'gemini-chat';
+                        }
+                    } catch (e) {
+                        alert(e.message);
+                    }
+                };
 
-            try {
-                const response = await fetch(`${BASE_URL}/api/v1/image/text-to-image`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        prompt,
-                        model,
-                        sampleCount: 1
-                    })
+                const fetchUser = async () => {
+                    if (!token.value) return;
+                    try {
+                        user.value = await apiCall('/auth/me');
+                    } catch (e) {
+                        logout();
+                    }
+                };
+
+                const logout = () => {
+                    token.value = null;
+                    user.value = null;
+                    localStorage.removeItem('token');
+                    activeTab.value = 'auth';
+                };
+
+                const sendChat = async () => {
+                    if (!chatInput.value.trim()) return;
+
+                    const userMsg = { role: 'user', content: chatInput.value };
+                    chatHistory.value.push(userMsg);
+                    const prompt = chatInput.value;
+                    chatInput.value = '';
+
+                    const payload = {
+                        prompt, // For simple chat, or construct messages array for full chat
+                        messages: chatHistory.value.map(m => ({ role: m.role, content: m.content })),
+                        model: selectedModel.value,
+                        stream: config.stream,
+                        thinkingConfig: config.thinking ? { includeThoughts: true, thinkingBudget: 4096 } : undefined,
+                        tools: []
+                    };
+
+                    if (config.googleSearch) payload.tools.push({ googleSearch: {} });
+                    if (config.codeExecution) payload.tools.push({ codeExecution: {} });
+
+                    // Add placeholder for AI response
+                    const aiMsg = reactive({ role: 'model', content: '', thoughts: '' });
+                    chatHistory.value.push(aiMsg);
+
+                    try {
+                        if (config.stream) {
+                            await apiCall('/api/v2/chat/stream', 'POST', payload, (chunk) => {
+                                const lines = chunk.split('\n');
+                                for (const line of lines) {
+                                    if (line.startsWith('data: ')) {
+                                        const dataStr = line.replace('data: ', '');
+                                        if (dataStr === '[DONE]') break;
+                                        try {
+                                            const data = JSON.parse(dataStr);
+                                            if (data.text) aiMsg.content += data.text;
+                                            if (data.thought) aiMsg.thoughts += data.thought;
+                                        } catch (e) { }
+                                    }
+                                }
+                            });
+                        } else {
+                            const data = await apiCall('/api/v2/chat/generate', 'POST', payload);
+                            aiMsg.content = data.text;
+                            if (data.thoughts) aiMsg.thoughts = data.thoughts.join('\n');
+                        }
+                    } catch (e) {
+                        aiMsg.content = `Error: ${e.message}`;
+                    }
+                };
+
+                const sendSimple = async () => {
+                    try {
+                        await apiCall('/api/v2/simple', 'POST', {
+                            prompt: simplePrompt.value,
+                            model: selectedModel.value
+                        });
+                    } catch (e) { }
+                };
+
+                const generateImage = async () => {
+                    try {
+                        await apiCall('/api/v1/image/text-to-image', 'POST', {
+                            prompt: imageForm.prompt,
+                            model: 'imagen-3.0-generate-001',
+                            sampleCount: imageForm.sampleCount,
+                            outputOptions: { mimeType: 'image/png' }
+                        });
+                    } catch (e) { }
+                };
+
+                // Lifecycle
+                onMounted(async () => {
+                    await checkHealth();
+                    await fetchModels();
+                    if (token.value) await fetchUser();
                 });
 
-                const data = await response.json();
+                // Computed
+                const getCurrentViewTitle = () => {
+                    const map = {
+                        'auth': 'Authentication',
+                        'gemini-chat': 'Gemini Chat',
+                        'gemini-simple': 'Simple Prompt',
+                        'vertex-image': 'Text to Image'
+                    };
+                    return map[activeTab.value] || activeTab.value;
+                };
 
-                if (data.success && data.images && data.images.length > 0) {
-                    const imgUrl = data.images[0].url;
-                    resultEl.innerHTML = `<img src="${imgUrl}" class="max-w-full h-auto rounded-lg shadow-lg border border-slate-700" alt="Generated Image">`;
-                } else {
-                    throw new Error('No image generated');
-                }
-            } catch (e) {
-                resultEl.innerHTML = `<div class="text-red-400 p-4 text-center">Failed: ${e.message}</div>`;
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Generate Image';
+                const getCurrentViewDesc = () => {
+                    const map = {
+                        'gemini-chat': 'Full chat capabilities with Streaming, Thinking Mode, and Tools.',
+                        'gemini-simple': 'Basic prompt-response generation.',
+                        'vertex-image': 'Generate high-quality images using Imagen 3 models.'
+                    };
+                    return map[activeTab.value] || '';
+                };
+
+                return {
+                    baseUrl, user, activeTab, healthStatus, isLoading, models, selectedModel, logs,
+                    authMode, authForm, chatInput, chatHistory, config, simplePrompt, imageForm, menu,
+                    highlight, renderMarkdown, handleAuth, logout, sendChat, sendSimple, generateImage,
+                    getCurrentViewTitle, getCurrentViewDesc
+                };
             }
-        }
+        }).mount('#app');
     </script>
 </body>
+
 </html>
