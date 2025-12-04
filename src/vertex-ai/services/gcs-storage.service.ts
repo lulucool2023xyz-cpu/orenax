@@ -45,22 +45,40 @@ export class GcsStorageService {
     /**
      * Initialize Google Cloud Storage
      */
+    /**
+     * Initialize Google Cloud Storage
+     */
     private initializeStorage(): void {
         try {
-            const credentialsPath = this.configService.get<string>('GOOGLE_APPLICATION_CREDENTIALS');
             const projectId = this.configService.get<string>('GOOGLE_CLOUD_PROJECT');
+            const credentialsPath = this.configService.get<string>('GOOGLE_APPLICATION_CREDENTIALS');
 
-            // Resolve to absolute path
-            const absolutePath = path.isAbsolute(credentialsPath!)
-                ? credentialsPath!
-                : path.resolve(process.cwd(), credentialsPath!);
-
-            this.logger.log(`Initializing GCS with credentials: ${absolutePath}`);
-
-            this.storage = new Storage({
-                keyFilename: absolutePath,
+            const storageOptions: any = {
                 projectId: projectId!,
-            });
+            };
+
+            // If credentials path is provided and file exists, use it as keyFilename.
+            // Otherwise, rely on ADC (Application Default Credentials) which works if
+            // GOOGLE_APPLICATION_CREDENTIALS env var is set correctly (e.g. by bootstrap).
+            if (credentialsPath) {
+                const absolutePath = path.isAbsolute(credentialsPath)
+                    ? credentialsPath
+                    : path.resolve(process.cwd(), credentialsPath);
+
+                // We can't easily check file existence synchronously without fs, 
+                // but we can try to require it or just pass it if we are sure.
+                // Better approach: If it looks like a file path, pass it. 
+                // If it fails, the Storage client might throw, but that's expected if config is wrong.
+
+                // However, to avoid "MODULE_NOT_FOUND" if we try to require it elsewhere,
+                // let's just pass keyFilename if provided.
+                storageOptions.keyFilename = absolutePath;
+                this.logger.log(`Initializing GCS with keyFilename: ${absolutePath}`);
+            } else {
+                this.logger.log('Initializing GCS with Application Default Credentials');
+            }
+
+            this.storage = new Storage(storageOptions);
 
             this.bucketName = this.configService.get<string>('GCS_BUCKET_NAME') || 'orenax-vertex-ai-images';
             this.imagePath = this.configService.get<string>('GCS_IMAGE_PATH') || 'images/generated';
@@ -69,6 +87,8 @@ export class GcsStorageService {
             this.logger.log(`GCS Storage initialized: bucket=${this.bucketName}, path=${this.imagePath}`);
         } catch (error) {
             this.logger.error('Failed to initialize GCS Storage:', error);
+            // Don't throw here to prevent app crash if GCS is optional, 
+            // but for this app it seems critical.
             throw error;
         }
     }

@@ -47,20 +47,33 @@ export class GenerationService {
      */
     private initializeClient(): void {
         try {
-            const credentialsPath = this.config.getCredentialsPath();
-
-            // Resolve to absolute path from project root
-            const absolutePath = path.isAbsolute(credentialsPath)
-                ? credentialsPath
-                : path.resolve(process.cwd(), credentialsPath);
-
-            this.logger.log(`Loading credentials from: ${absolutePath}`);
-            const credentials = require(absolutePath);
-
-            this.client = new PredictionServiceClient({
+            const clientOptions: any = {
                 apiEndpoint: `${this.config.getLocation()}-${this.config.getApiEndpoint()}`,
-                credentials,
-            });
+            };
+
+            // If GOOGLE_APPLICATION_CREDENTIALS is set, the client will use it automatically.
+            // Only load manually if we need to support a custom path from config that isn't in env.
+            const envCredentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+            const configCredentialsPath = this.config.getCredentialsPath();
+
+            if (!envCredentialsPath && configCredentialsPath) {
+                // Resolve to absolute path from project root
+                const absolutePath = path.isAbsolute(configCredentialsPath)
+                    ? configCredentialsPath
+                    : path.resolve(process.cwd(), configCredentialsPath);
+
+                this.logger.log(`Loading credentials from config: ${absolutePath}`);
+                try {
+                    // eslint-disable-next-line @typescript-eslint/no-var-requires
+                    const credentials = require(absolutePath);
+                    clientOptions.credentials = credentials;
+                } catch (e) {
+                    this.logger.warn(`Could not load credentials from ${absolutePath}: ${e.message}`);
+                    // Don't throw here, let the client try default auth methods
+                }
+            }
+
+            this.client = new PredictionServiceClient(clientOptions);
 
             this.logger.log('Vertex AI PredictionServiceClient initialized successfully');
         } catch (error) {
