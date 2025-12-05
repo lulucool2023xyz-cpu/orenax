@@ -31,8 +31,11 @@ async function bootstrap() {
     : [
       'http://localhost:3000',
       'http://localhost:3001',
+      'http://localhost:8080',
       'https://orenax.vercel.app',
       'https://orenax.netlify.app',
+      'https://artificial-production.up.railway.app',
+      'https://orenax-production.up.railway.app',
     ];
 
   app.enableCors({
