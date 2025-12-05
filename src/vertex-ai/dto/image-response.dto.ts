@@ -7,7 +7,9 @@
  * Single Generated Image
  */
 export class GeneratedImageDto {
-    url: string; // Public GCS URL
+    url: string; // Public GCS URL (same as publicUrl for backward compatibility)
+    publicUrl: string; // Public HTTPS URL
+    gcsUri: string; // GCS URI (gs://bucket/path)
     filename: string;
     mimeType: string;
     generatedAt: string;

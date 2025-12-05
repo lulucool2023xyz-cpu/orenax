@@ -47,8 +47,21 @@ export class TextToImageDto {
     @IsString()
     negativePrompt?: string;
 
-    // Note: 'language' field is NOT supported by Vertex AI Imagen API
-    // Removed to prevent INVALID_ARGUMENT errors
+    @IsOptional()
+    @IsString()
+    aspectRatio?: string; // Default: "1:1" - supports "1:1", "9:16", "16:9", "3:4", "4:3"
+
+    @IsOptional()
+    @IsBoolean()
+    enhancePrompt?: boolean; // Use LLM-based prompt rewriting for better quality
+
+    @IsOptional()
+    @IsString()
+    language?: string; // Language code: auto, en, zh, zh-TW, hi, ja, ko, pt, es
+
+    @IsOptional()
+    @IsString()
+    sampleImageSize?: string; // Output resolution: "1K" or "2K"
 
     @IsOptional()
     @ValidateNested()
@@ -66,6 +79,10 @@ export class TextToImageDto {
     @IsOptional()
     @IsEnum(['dont_allow', 'allow_adult', 'allow_all'])
     personGeneration?: string;
+
+    @IsOptional()
+    @IsString()
+    userId?: string; // User ID for saving to Supabase database
 }
 
 /**

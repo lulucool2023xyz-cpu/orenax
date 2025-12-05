@@ -1,211 +1,141 @@
 # OrenaX Backend Documentation
 
-Dokumentasi lengkap untuk OrenaX Backend - NestJS dengan Supabase Authentication dan Google Vertex AI.
+Dokumentasi lengkap untuk OrenaX Backend API.
 
-## 📚 Dokumentasi Utama
+---
 
-### 🔐 API Authentication
-Dokumentasi untuk autentikasi dan OAuth:
-- [API Testing - Authentication](./api/authentication/api-testing.md) - Panduan testing endpoint autentikasi
-- [Setup OAuth](./api/authentication/setup-oauth.md) - Konfigurasi Google & Facebook OAuth
+## 📁 Struktur Dokumentasi
 
-### 💬 API Chat (Vertex AI)
-Dokumentasi untuk Vertex AI Chat API:
-- [API Chat Documentation](./api/chat/api-chat.md) - Dokumentasi lengkap endpoint chat dengan Vertex AI
+```
+docs/
+├── README.md                    # File ini (indeks utama)
+│
+├── 01-getting-started/          # 🚀 Setup & konfigurasi awal
+│   ├── README.md                # Quick start guide
+│   ├── environment-setup.md     # Environment variables
+│   ├── gcs-cloud-storage.md     # Google Cloud Storage setup
+│   └── vertex-ai-setup.md       # Google Cloud Vertex AI setup
+│
+├── 02-authentication/           # 🔐 Auth endpoints
+│   ├── email-password-auth.md   # Email/password login
+│   ├── google-oauth.md          # Google OAuth
+│   ├── github-oauth.md          # GitHub OAuth
+│   └── facebook-oauth.md        # Facebook OAuth
+│
+├── 03-api-v1-chat/              # 💬 Chat API V1 (Vertex AI)
+│   ├── README.md                # Overview & endpoints
+│   ├── v1-complete-reference.md # /api/v1/* legacy endpoints
+│   ├── v1-unified-api.md        # ⭐ NEW /v1/* unified API
+│   ├── chat-endpoints.md        # POST /api/v1/chat
+│   ├── thinking-mode.md         # Thinking configuration
+│   ├── grounding-search.md      # Google Search grounding
+│   └── conversation-storage.md  # Supabase storage
+│
+├── 04-api-v1-media/             # 🎨 Media API V1
+│   ├── README.md                # Overview
+│   ├── image-generation.md      # Image endpoints (Imagen)
+│   ├── gemini-images.md         # Gemini image generation
+│   ├── video-generation.md      # Video endpoints (Veo)
+│   ├── music-generation.md      # Music endpoints (Lyria)
+│   └── tts-audio.md             # TTS endpoints
+│
+├── 05-api-v2-gemini/            # ⚡ API V2 (Gemini Direct)
+│   ├── README.md                # Overview
+│   ├── api-reference.md         # Complete API reference
+│   ├── models-and-features.md   # Models comparison
+│   └── examples.md              # Usage examples
+│
+├── 06-database/                 # 🗄️ Supabase Database
+│   ├── README.md                # Overview
+│   ├── 01-users-auth-schema.sql       # Basic auth schema
+│   ├── 02-conversations-schema.sql    # Chat conversations
+│   ├── 03-generated-media-schema.sql  # Generated assets
+│   └── conversation-guide.md          # Storage guide
+│
+├── 07-testing/                  # 🧪 Testing guides
+│   ├── api-testing-curl.md      # cURL examples
+│   ├── postman-collection.json  # Postman collection
+│   └── model-responses.md       # Sample responses
+│
+└── 08-troubleshooting/          # 🔧 Common issues
+    ├── common-errors.md         # Error solutions
+    ├── project-structure.md     # Code structure
+    └── frontend-issues.md       # Frontend fixes
+```
 
-### 🎨 API Image (Vertex AI)
-Dokumentasi untuk Vertex AI Image API:
-- [API Image Documentation](./api/image/api-image.md) - Image generation, editing, upscaling, virtual try-on, product recontext
+---
 
-### 💾 Database
-Dokumentasi database dan storage:
-- [Database Schema](./database/schema.sql) - SQL schema untuk conversations & messages
-- [Conversation Storage Guide](./database/conversation-storage.md) - Panduan lengkap conversation management
+## 🔗 Quick Links
 
-### 🧪 Testing
-Panduan testing untuk semua fitur:
-- [API Testing - Chat](./testing/api-testing-chat.md) - Testing chat endpoints
-- [Feature Testing Guide](./testing/TESTING-GUIDE.md) - **NEW!** Testing untuk Thinking Mode, Grounding, Streaming
+### Untuk Developer Baru
+1. [Getting Started](01-getting-started/README.md) - Setup environment
+2. [Authentication](02-authentication/email-password-auth.md) - Login system
+3. [API Testing](07-testing/api-testing-curl.md) - Test endpoints
 
-### ⚙️ Setup & Configuration
-Panduan setup dan konfigurasi:
-- [Vertex AI Setup](./setup/vertex-ai-setup.md) - Setup Google Cloud Vertex AI
-- [Success Criteria](./setup/success-criteria.md) - Kriteria keberhasilan implementasi
+### API Reference
+- ⭐ **[V1 Unified API](03-api-v1-chat/v1-unified-api.md)** - NEW! Modern `/v1/*` endpoints
+- [API V1 Legacy](03-api-v1-chat/v1-complete-reference.md) - `/api/v1/*` endpoints
+- [API V1 Media](04-api-v1-media/README.md) - Image, Video, Music, TTS
+- [API V2 Gemini](05-api-v2-gemini/api-reference.md) - Full Gemini API
+
+### Database
+- [Schema Overview](06-database/README.md)
+- [Run SQL Files](06-database/) - Copy-paste to Supabase
+
+---
+
+## 📊 API Summary
+
+| API Version | Base URL | Auth Required | Description |
+|-------------|----------|---------------|-------------|
+| ⭐ V1 Unified | `/v1/*` | Optional | Modern GenAI SDK endpoints |
+| V1 Chat | `/api/v1/chat` | ✅ JWT | Vertex AI chat |
+| V1 Image | `/api/v1/image` | ✅ JWT | Imagen models |
+| V1 Video | `/api/v1/video` | ✅ JWT | Veo models |
+| V1 Music | `/api/v1/music` | ✅ JWT | Lyria model |
+| V1 Audio | `/api/v1/audio` | ✅ JWT | TTS |
+| V2 | `/api/v2/*` | ✅ JWT | Gemini API |
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Install Dependencies
 ```bash
-cd back_end
+# 1. Install dependencies
 npm install
-```
 
-### 2. Configure Environment
-Edit file `.env`:
-```env
-# Supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+# 2. Copy environment file
+cp .env.example .env
 
-# Google Cloud Vertex AI
-GOOGLE_CLOUD_PROJECT=your-project-id
-GOOGLE_CLOUD_LOCATION=us-central1
-```
+# 3. Configure .env with your credentials:
+#    - SUPABASE_URL, SUPABASE_ANON_KEY
+#    - GEMINI_API_KEY
+#    - GOOGLE_CLOUD_PROJECT
+#    - JWT_SECRET
 
-### 3. Run Server
-```bash
+# 4. Run database migrations
+# Copy SQL files from docs/06-database/ to Supabase SQL Editor
+
+# 5. Run development server
 npm run start:dev
 ```
 
-Server akan berjalan di: `http://localhost:3001`
+---
+
+## 📞 Status
+
+| Component | Status |
+|-----------|--------|
+| API V1 Chat | ✅ Production |
+| API V1 Image (Imagen) | ✅ Production |
+| API V1 Image (Gemini) | ✅ Production |
+| API V1 Video (Veo) | ✅ Production |
+| API V1 Music (Lyria) | ✅ Production |
+| API V1 Audio (TTS) | ✅ Production |
+| API V2 Gemini | ✅ Production |
+| Database (Supabase) | ✅ Production |
+| Storage (GCS) | ✅ Production |
 
 ---
 
-## ✨ Fitur Utama
-
-### 1. **Authentication**
-- ✅ Email/Password authentication
-- ✅ Google OAuth
-- ✅ Facebook OAuth
-- ✅ JWT token management
-- ✅ Refresh token support
-
-### 2. **Vertex AI Chat**
-- ✅ Multiple Gemini models (2.5 Flash, 2.5 Pro, 3 Pro Preview)
-- ✅ **Thinking Mode** - AI reasoning dengan streaming
-  - Gemini 2.5: `thinkingBudget` (token-based)
-  - Gemini 3: `thinkingLevel` (LOW/HIGH)
-- ✅ **Grounding** - Real-time data dari Google
-  - Google Search grounding
-  - Google Maps grounding
-  - URL context grounding
-- ✅ **Streaming Responses** - Server-Sent Events (SSE)
-- ✅ **Conversation Management** - Multi-turn conversations dengan history
-- ✅ **Token Counting** - Estimasi biaya dan optimasi
-
-### 3. **Vertex AI Image**
-- ✅ **Text-to-Image** - Generate images dari text prompts
-  - Imagen 3.0 & 4.0 models
-  - Gemini Image models (2.5 Flash, 3 Pro)
-- ✅ **Image Upscale** - Upscale images dengan Imagen 4.0
-- ✅ **Image Edit** - Edit images dengan masks dan prompts
-  - Inpainting (insertion/removal)
-  - Background swap
-  - Outpainting
-- ✅ **Image Customize** - Customize images dengan reference images
-  - Person/animal/product customization
-  - Style transfer
-  - Control image support
-- ✅ **Virtual Try-On** - Virtual try-on untuk clothing products
-- ✅ **Product Recontext** - Recontextualize products ke different scenes
-- ✅ **Multiple Models** - Support 12+ image generation models
-- ✅ **Safety Filters** - Built-in safety filtering dengan error codes
-
-### 4. **Database**
-- ✅ Supabase PostgreSQL
-- ✅ Row Level Security (RLS)
-- ✅ Conversation & message storage
-- ✅ Automatic timestamps
-- ✅ User data isolation
-
----
-
-## 🧪 Testing Quick Reference
-
-### Authentication Test
-```bash
-curl -X POST http://localhost:3001/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "password": "password"}'
-```
-
-### Chat Test (Basic)
-```bash
-curl -X POST http://localhost:3001/api/v1/chat \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
-```
-
-### Thinking Mode Test
-```bash
-curl -X POST http://localhost:3001/api/v1/chat \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gemini-2.5-flash",
-    "messages": [{"role": "user", "content": "Solve: 2x + 5 = 15"}],
-    "thinkingConfig": {"thinkingBudget": 1000},
-    "stream": true
-  }'
-```
-
-### Grounding Test
-```bash
-curl -X POST http://localhost:3001/api/v1/chat \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [{"role": "user", "content": "Latest AI news?"}],
-    "groundingConfig": {"googleSearch": {}}
-  }'
-```
-
-### Image Generation Test
-```bash
-curl -X POST http://localhost:3001/api/v1/image/text-to-image \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "A beautiful sunset over mountains",
-    "model": "imagen-3.0-generate-001",
-    "sampleCount": 1
-  }'
-```
-
-Lihat [Feature Testing Guide](./testing/TESTING-GUIDE.md) untuk dokumentasi lengkap!
-
----
-
-## 📖 Dokumentasi Lengkap
-
-| Kategori | Dokumen | Deskripsi |
-|----------|---------|-----------|
-| **API** | [Authentication Testing](./api/authentication/api-testing.md) | Testing auth endpoints |
-| | [OAuth Setup](./api/authentication/setup-oauth.md) | Konfigurasi OAuth providers |
-| | [Chat API](./api/chat/api-chat.md) | Vertex AI chat endpoints |
-| | [Image API](./api/image/api-image.md) | Vertex AI image generation & editing |
-| **Database** | [Schema](./database/schema.sql) | Database schema SQL |
-| | [Conversation Storage](./database/conversation-storage.md) | Conversation management |
-| **Testing** | [Chat Testing](./testing/api-testing-chat.md) | Chat API testing |
-| | [Feature Testing](./testing/TESTING-GUIDE.md) | Thinking, Grounding, Streaming |
-| **Setup** | [Vertex AI Setup](./setup/vertex-ai-setup.md) | Google Cloud configuration |
-| | [Success Criteria](./setup/success-criteria.md) | Implementation checklist |
-
----
-
-## 🛠️ Tech Stack
-
-- **Framework**: NestJS (TypeScript)
-- **Database**: Supabase (PostgreSQL)
-- **AI**: Google Cloud Vertex AI (Gemini)
-- **Authentication**: Supabase Auth + JWT
-- **API**: RESTful + Server-Sent Events (SSE)
-
----
-
-## 📞 Support
-
-Untuk pertanyaan dan dukungan:
-- Lihat dokumentasi di folder `docs/`
-- Check [Testing Guide](./testing/TESTING-GUIDE.md) untuk troubleshooting
-- Review [Success Criteria](./setup/success-criteria.md) untuk checklist
-
----
-
-## 📝 License
-
-MIT License
+*Last Updated: December 2024*

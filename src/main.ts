@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { bootstrapProduction } from './bootstrap';
 
@@ -16,6 +17,10 @@ async function bootstrap() {
       ? ['error', 'warn', 'log']
       : ['error', 'warn', 'log', 'debug', 'verbose'],
   });
+
+  // Increase body parser limit for large image uploads (base64 encoded images can be large)
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ extended: true, limit: '50mb' }));
 
   // Serve static assets from public directory
   app.useStaticAssets(join(__dirname, '..', 'public'));

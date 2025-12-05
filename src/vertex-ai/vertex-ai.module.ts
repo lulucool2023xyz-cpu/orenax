@@ -12,6 +12,16 @@ import { FunctionCallingService } from './services/function-calling.service';
 import { CacheService } from './services/cache.service';
 import { ImageService } from './services/image.service';
 import { GcsStorageService } from './services/gcs-storage.service';
+import { GeminiImageService } from './services/gemini-image.service';
+import { VideoService } from './services/video.service';
+import { MusicService } from './services/music.service';
+import { TtsService } from './services/tts.service';
+import { GenAIClientService } from './services/genai-client.service';
+import { PromptManagementService } from './services/prompt-management.service';
+import { UrlContextService } from './services/url-context.service';
+import { DocumentService } from './services/document.service';
+import { SafetyFilterService } from './services/safety-filter.service';
+import { V1ApiController } from './controllers/v1-api.controller';
 
 /**
  * Vertex AI Module
@@ -20,6 +30,7 @@ import { GcsStorageService } from './services/gcs-storage.service';
 @Global()
 @Module({
     imports: [ConfigModule, SupabaseModule],
+    controllers: [V1ApiController],
     providers: [
         VertexAiConfigService,
         GenerationService,
@@ -32,6 +43,15 @@ import { GcsStorageService } from './services/gcs-storage.service';
         CacheService,
         GcsStorageService,
         ImageService,
+        GeminiImageService,
+        VideoService,
+        MusicService,
+        TtsService,
+        GenAIClientService,
+        PromptManagementService,
+        UrlContextService,
+        DocumentService,
+        SafetyFilterService,
     ],
     exports: [
         VertexAiConfigService,
@@ -45,6 +65,15 @@ import { GcsStorageService } from './services/gcs-storage.service';
         CacheService,
         GcsStorageService,
         ImageService,
+        GeminiImageService,
+        VideoService,
+        MusicService,
+        TtsService,
+        GenAIClientService,
+        PromptManagementService,
+        UrlContextService,
+        DocumentService,
+        SafetyFilterService,
     ],
 })
 export class VertexAiModule { }

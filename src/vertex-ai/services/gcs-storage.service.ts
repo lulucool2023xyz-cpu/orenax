@@ -21,6 +21,8 @@ export interface ImageMetadata {
  */
 export interface UploadResult {
     url: string;
+    publicUrl: string;
+    gcsUri: string;
     filename: string;
     mimeType: string;
     generatedAt: string;
@@ -136,11 +138,14 @@ export class GcsStorageService {
                 await this.makePublic(filePath);
             }
 
-            // Generate public URL
+            // Generate public URL and GCS URI
             const url = this.getPublicUrl(filePath);
+            const gcsUri = `gs://${this.bucketName}/${filePath}`;
 
             return {
                 url,
+                publicUrl: url,
+                gcsUri,
                 filename,
                 mimeType,
                 generatedAt: metadata.generatedAt.toISOString(),
@@ -240,5 +245,69 @@ export class GcsStorageService {
             this.logger.error(`Failed to check bucket: ${error.message}`);
             return false;
         }
+    }
+
+    /**
+     * Upload buffer directly to GCS (for video/audio)
+     */
+    async uploadBuffer(
+        buffer: Buffer,
+        filePath: string,
+        mimeType: string,
+    ): Promise<{ gcsUri: string; publicUrl: string }> {
+        try {
+            const bucket = this.storage.bucket(this.bucketName);
+            const file = bucket.file(filePath);
+
+            await file.save(buffer, {
+                metadata: { contentType: mimeType },
+            });
+
+            if (this.enablePublicAccess) {
+                await this.makePublic(filePath);
+            }
+
+            const publicUrl = this.getPublicUrl(filePath);
+            const gcsUri = `gs://${this.bucketName}/${filePath}`;
+
+            this.logger.log(`Buffer uploaded to GCS: ${filePath}`);
+
+            return { gcsUri, publicUrl };
+        } catch (error) {
+            this.logger.error(`Failed to upload buffer: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Download file from GCS (for editing)
+     */
+    async downloadFile(gcsUri: string): Promise<Buffer> {
+        try {
+            // Parse gs://bucket/path format
+            const match = gcsUri.match(/^gs:\/\/([^/]+)\/(.+)$/);
+            if (!match) {
+                throw new Error(`Invalid GCS URI: ${gcsUri}`);
+            }
+
+            const [, bucketName, filePath] = match;
+            const bucket = this.storage.bucket(bucketName);
+            const file = bucket.file(filePath);
+
+            const [contents] = await file.download();
+            this.logger.log(`Downloaded file from GCS: ${gcsUri}`);
+
+            return contents;
+        } catch (error) {
+            this.logger.error(`Failed to download file: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Get bucket name
+     */
+    getBucketName(): string {
+        return this.bucketName;
     }
 }

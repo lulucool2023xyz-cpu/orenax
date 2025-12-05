@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PredictionServiceClient } from '@google-cloud/aiplatform';
+import { PredictionServiceClient, helpers } from '@google-cloud/aiplatform';
 import { google } from '@google-cloud/aiplatform/build/protos/protos';
 import * as path from 'path';
 import { VertexAiConfigService } from '../config/vertex-ai.config';
 import { GcsStorageService } from './gcs-storage.service';
+import { MediaStorageService } from '../../supabase/media-storage.service';
 import { ImageErrorHandler } from '../utils/image-error-handler.util';
 import {
     TextToImageDto,
@@ -21,6 +22,7 @@ type IPredictRequest = google.cloud.aiplatform.v1.IPredictRequest;
 /**
  * Image Service for Vertex AI Imagen
  * Handles all image generation, editing, and manipulation operations
+ * Now with Supabase storage for authenticated users!
  */
 @Injectable()
 export class ImageService {
@@ -30,6 +32,7 @@ export class ImageService {
     constructor(
         private readonly config: VertexAiConfigService,
         private readonly gcsStorage: GcsStorageService,
+        private readonly mediaStorage: MediaStorageService,
     ) {
         this.initializeClient();
     }
@@ -79,6 +82,7 @@ export class ImageService {
     /**
      * Text-to-Image Generation
      * Generate images from text prompts using Imagen or Gemini models
+     * Saves to Supabase if userId is provided
      */
     async textToImage(dto: TextToImageDto): Promise<ImageGenerationResponseDto> {
         try {
@@ -120,6 +124,33 @@ export class ImageService {
 
             ImageErrorHandler.logGenerationSuccess('text-to-image', uploadedImages.length);
 
+            // Save to Supabase if userId provided (authenticated user)
+            if (dto.userId) {
+                for (const img of uploadedImages) {
+                    if (img.url) {
+                        await this.mediaStorage.saveMedia({
+                            userId: dto.userId,
+                            mediaType: 'image',
+                            url: img.url,
+                            gcsUri: img.gcsUri,
+                            filename: img.filename,
+                            mimeType: img.mimeType || 'image/png',
+                            model: model,
+                            prompt: dto.prompt,
+                            negativePrompt: dto.negativePrompt,
+                            apiVersion: 'v1',
+                            endpoint: 'text-to-image',
+                            metadata: {
+                                aspectRatio: dto.aspectRatio,
+                                sampleCount: dto.sampleCount,
+                                enhancePrompt: dto.enhancePrompt,
+                            },
+                        });
+                        this.logger.log(`Saved image to Supabase for user ${dto.userId}`);
+                    }
+                }
+            }
+
             return {
                 success: true,
                 model,
@@ -132,45 +163,76 @@ export class ImageService {
 
     /**
      * Generate with Imagen models (imagen-3.0, imagen-4.0)
+     * Per Vertex AI docs: instances and parameters must be protobuf Value objects
      */
     private async generateWithImagen(endpoint: string, dto: TextToImageDto): Promise<any> {
-        // Build parameters object according to Vertex AI Imagen API spec
-        const parameters: any = {
-            sampleCount: dto.sampleCount || 1,
-            addWatermark: dto.addWatermark ?? true,
+        // Build instance - plain prompt object per API docs
+        const instance: Record<string, any> = {
+            prompt: dto.prompt,
         };
 
-        // Add optional parameters
-        if (dto.seed !== undefined) parameters.seed = dto.seed;
-        if (dto.negativePrompt) parameters.negativePrompt = dto.negativePrompt;
+        // Build parameters per official Imagen API documentation
+        const parameters: Record<string, any> = {
+            sampleCount: dto.sampleCount || 1,
+        };
 
-        // Note: 'language' is NOT a supported parameter in Vertex AI Imagen API
-        // It will be ignored to prevent INVALID_ARGUMENT errors
-
-        if (dto.outputOptions) {
-            parameters.outputOptions = {
-                ...(dto.outputOptions.mimeType && { mimeType: dto.outputOptions.mimeType }),
-                ...(dto.outputOptions.compressionQuality !== undefined && {
-                    compressionQuality: dto.outputOptions.compressionQuality
-                }),
-            };
+        // Optional parameters per API docs
+        if (dto.negativePrompt) {
+            parameters.negativePrompt = dto.negativePrompt;
         }
 
-        if (dto.storageUri) parameters.storageUri = dto.storageUri;
-        if (dto.safetySetting) parameters.safetySetting = dto.safetySetting;
-        if (dto.personGeneration) parameters.personGeneration = dto.personGeneration;
+        if (dto.aspectRatio) {
+            parameters.aspectRatio = dto.aspectRatio;
+        }
 
-        const request: any = {
+        if (dto.enhancePrompt !== undefined) {
+            parameters.enhancePrompt = dto.enhancePrompt;
+        }
+
+        if (dto.addWatermark !== undefined) {
+            parameters.addWatermark = dto.addWatermark;
+        } else {
+            parameters.addWatermark = true; // Default per API docs
+        }
+
+        if (dto.seed !== undefined) {
+            parameters.seed = dto.seed;
+        }
+
+        if (dto.personGeneration) {
+            parameters.personGeneration = dto.personGeneration;
+        }
+
+        if (dto.safetySetting) {
+            parameters.safetySetting = dto.safetySetting;
+        }
+
+        if (dto.language) {
+            parameters.language = dto.language;
+        }
+
+        if (dto.sampleImageSize) {
+            parameters.sampleImageSize = dto.sampleImageSize;
+        }
+
+        if (dto.outputOptions) {
+            parameters.outputOptions = dto.outputOptions;
+        }
+
+        if (dto.storageUri) {
+            parameters.storageUri = dto.storageUri;
+        }
+
+        // Convert to protobuf Value format as required by Vertex AI SDK
+        const request: IPredictRequest = {
             endpoint,
-            instances: [
-                {
-                    prompt: dto.prompt,
-                },
-            ],
-            parameters,
+            instances: [helpers.toValue(instance) as any],
+            parameters: helpers.toValue(parameters) as any,
         };
 
-        this.logger.debug(`Vertex AI Request: ${JSON.stringify(request, null, 2)}`);
+        this.logger.debug(`Imagen Request to: ${endpoint}`);
+        this.logger.debug(`Instance: ${JSON.stringify(instance)}`);
+        this.logger.debug(`Parameters: ${JSON.stringify(parameters)}`);
 
         const [response] = await this.client.predict(request);
         return response;
@@ -187,20 +249,39 @@ export class ImageService {
 
     /**
      * Extract images from Vertex AI response
+     * Predictions come as protobuf Value objects, need to convert them
      */
     private extractImagesFromResponse(response: any, isGemini: boolean): Array<{ base64Data: string; mimeType: string }> {
+        this.logger.debug(`Raw response: ${JSON.stringify(response, null, 2)}`);
+
         if (!response.predictions || response.predictions.length === 0) {
             throw new Error('No images generated');
         }
 
         return response.predictions.map((prediction: any) => {
-            if (!prediction.bytesBase64Encoded) {
+            // Convert protobuf Value to JavaScript object if needed
+            let predictionObj = prediction;
+
+            // Check if it's a protobuf Value object (has structValue or fields)
+            if (prediction.structValue || prediction.fields) {
+                predictionObj = helpers.fromValue(prediction);
+            }
+
+            this.logger.debug(`Prediction object: ${JSON.stringify(predictionObj)}`);
+
+            // Handle different response structures
+            const base64Data = predictionObj.bytesBase64Encoded ||
+                predictionObj.bytes_base64_encoded ||
+                (predictionObj.image && predictionObj.image.bytesBase64Encoded);
+
+            if (!base64Data) {
+                this.logger.error(`Prediction structure: ${JSON.stringify(predictionObj)}`);
                 throw new Error('Image data missing from response');
             }
 
             return {
-                base64Data: prediction.bytesBase64Encoded,
-                mimeType: prediction.mimeType || 'image/png',
+                base64Data: base64Data,
+                mimeType: predictionObj.mimeType || predictionObj.mime_type || 'image/png',
             };
         });
     }

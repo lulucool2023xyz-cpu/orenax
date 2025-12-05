@@ -331,6 +331,15 @@ export class GeminiChatRequestDto {
     @IsOptional()
     @IsBoolean()
     stream?: boolean;
+
+    // For context memory
+    @IsOptional()
+    @IsString()
+    userId?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    useContext?: boolean; // Inject user's conversation history context
 }
 
 /**

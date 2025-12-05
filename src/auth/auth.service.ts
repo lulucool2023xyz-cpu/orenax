@@ -1,17 +1,22 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SupabaseService } from '../supabase/supabase.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { GoogleLoginDto } from './dto/google-login.dto';
 import { FacebookLoginDto } from './dto/facebook-login.dto';
+import { GitHubLoginDto } from './dto/github-login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
+    private readonly logger = new Logger(AuthService.name);
+
     constructor(
         private jwtService: JwtService,
         private supabaseService: SupabaseService,
+        private configService: ConfigService,
     ) { }
 
     async register(registerDto: RegisterDto) {
@@ -61,13 +66,19 @@ export class AuthService {
                 };
             }
 
+            this.logger.log(`User registered successfully: ${loginData.user.email}`);
             return {
                 message: 'Registration successful',
                 user: {
                     id: loginData.user.id,
                     email: loginData.user.email,
                     name: loginData.user.user_metadata?.name,
+                    fullName: loginData.user.user_metadata?.name,
                 },
+                accessToken: loginData.session.access_token,
+                refreshToken: loginData.session.refresh_token,
+                expiresIn: loginData.session.expires_in,
+                expiresAt: loginData.session.expires_at,
                 session: loginData.session,
             };
 
@@ -117,13 +128,19 @@ export class AuthService {
             throw new UnauthorizedException('Invalid credentials');
         }
 
+        this.logger.log(`User logged in successfully: ${data.user.email}`);
         return {
             message: 'Login successful',
             user: {
                 id: data.user.id,
                 email: data.user.email,
                 name: data.user.user_metadata?.name,
+                fullName: data.user.user_metadata?.name,
             },
+            accessToken: data.session.access_token,
+            refreshToken: data.session.refresh_token,
+            expiresIn: data.session.expires_in,
+            expiresAt: data.session.expires_at,
             session: data.session,
         };
     }
@@ -132,13 +149,16 @@ export class AuthService {
         const { accessToken } = googleLoginDto;
         const supabase = this.supabaseService.getClient();
 
-        // Sign in with Google access token
+        this.logger.log('Attempting Google login with ID token');
+
+        // Sign in with Google ID token (obtained from Google Sign-In on frontend)
         const { data, error } = await supabase.auth.signInWithIdToken({
             provider: 'google',
             token: accessToken,
         });
 
         if (error) {
+            this.logger.error(`Google login failed: ${error.message}`);
             throw new UnauthorizedException(error.message);
         }
 
@@ -146,13 +166,20 @@ export class AuthService {
             throw new UnauthorizedException('Google authentication failed');
         }
 
+        this.logger.log(`Google login successful: ${data.user.email}`);
         return {
             message: 'Google login successful',
             user: {
                 id: data.user.id,
                 email: data.user.email,
                 name: data.user.user_metadata?.name || data.user.user_metadata?.full_name,
+                fullName: data.user.user_metadata?.name || data.user.user_metadata?.full_name,
+                avatarUrl: data.user.user_metadata?.avatar_url || data.user.user_metadata?.picture,
             },
+            accessToken: data.session.access_token,
+            refreshToken: data.session.refresh_token,
+            expiresIn: data.session.expires_in,
+            expiresAt: data.session.expires_at,
             session: data.session,
         };
     }
@@ -161,6 +188,8 @@ export class AuthService {
         const { accessToken } = facebookLoginDto;
         const supabase = this.supabaseService.getClient();
 
+        this.logger.log('Attempting Facebook login with access token');
+
         // Sign in with Facebook access token
         const { data, error } = await supabase.auth.signInWithIdToken({
             provider: 'facebook',
@@ -168,6 +197,7 @@ export class AuthService {
         });
 
         if (error) {
+            this.logger.error(`Facebook login failed: ${error.message}`);
             throw new UnauthorizedException(error.message);
         }
 
@@ -175,13 +205,20 @@ export class AuthService {
             throw new UnauthorizedException('Facebook authentication failed');
         }
 
+        this.logger.log(`Facebook login successful: ${data.user.email}`);
         return {
             message: 'Facebook login successful',
             user: {
                 id: data.user.id,
                 email: data.user.email,
                 name: data.user.user_metadata?.name || data.user.user_metadata?.full_name,
+                fullName: data.user.user_metadata?.name || data.user.user_metadata?.full_name,
+                avatarUrl: data.user.user_metadata?.avatar_url || data.user.user_metadata?.picture,
             },
+            accessToken: data.session.access_token,
+            refreshToken: data.session.refresh_token,
+            expiresIn: data.session.expires_in,
+            expiresAt: data.session.expires_at,
             session: data.session,
         };
     }
@@ -278,5 +315,173 @@ export class AuthService {
         }
 
         return null;
+    }
+
+    /**
+     * Generate OAuth URL for Google login via Supabase
+     * Frontend should redirect user to this URL
+     */
+    async getGoogleOAuthUrl(redirectTo?: string) {
+        const supabase = this.supabaseService.getClient();
+        const defaultRedirect = this.configService.get<string>('OAUTH_REDIRECT_URL') ||
+            `${this.configService.get<string>('APP_URL', 'http://localhost:3001')}/auth/callback`;
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: redirectTo || defaultRedirect,
+                scopes: 'email profile',
+            },
+        });
+
+        if (error) {
+            this.logger.error(`Failed to generate Google OAuth URL: ${error.message}`);
+            throw new BadRequestException(error.message);
+        }
+
+        this.logger.log('Generated Google OAuth URL');
+        return {
+            url: data.url,
+            provider: 'google',
+        };
+    }
+
+    /**
+     * Generate OAuth URL for Facebook login via Supabase
+     * Frontend should redirect user to this URL
+     */
+    async getFacebookOAuthUrl(redirectTo?: string) {
+        const supabase = this.supabaseService.getClient();
+        const defaultRedirect = this.configService.get<string>('OAUTH_REDIRECT_URL') ||
+            `${this.configService.get<string>('APP_URL', 'http://localhost:3001')}/auth/callback`;
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'facebook',
+            options: {
+                redirectTo: redirectTo || defaultRedirect,
+                scopes: 'email public_profile',
+            },
+        });
+
+        if (error) {
+            this.logger.error(`Failed to generate Facebook OAuth URL: ${error.message}`);
+            throw new BadRequestException(error.message);
+        }
+
+        this.logger.log('Generated Facebook OAuth URL');
+        return {
+            url: data.url,
+            provider: 'facebook',
+        };
+    }
+
+    /**
+     * Generate OAuth URL for GitHub login via Supabase
+     * Frontend should redirect user to this URL
+     */
+    async getGitHubOAuthUrl(redirectTo?: string) {
+        const supabase = this.supabaseService.getClient();
+        const defaultRedirect = this.configService.get<string>('OAUTH_REDIRECT_URL') ||
+            `${this.configService.get<string>('APP_URL', 'http://localhost:3001')}/auth/callback`;
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'github',
+            options: {
+                redirectTo: redirectTo || defaultRedirect,
+                scopes: 'user:email read:user',
+            },
+        });
+
+        if (error) {
+            this.logger.error(`Failed to generate GitHub OAuth URL: ${error.message}`);
+            throw new BadRequestException(error.message);
+        }
+
+        this.logger.log('Generated GitHub OAuth URL');
+        return {
+            url: data.url,
+            provider: 'github',
+        };
+    }
+
+    /**
+     * Login with GitHub OAuth token
+     * For frontends that handle OAuth flow themselves
+     */
+    async loginWithGitHub(githubLoginDto: GitHubLoginDto) {
+        const { accessToken } = githubLoginDto;
+        const supabase = this.supabaseService.getClient();
+
+        this.logger.log('Attempting GitHub login with access token');
+
+        // Sign in with GitHub access token
+        const { data, error } = await supabase.auth.signInWithIdToken({
+            provider: 'github',
+            token: accessToken,
+        });
+
+        if (error) {
+            this.logger.error(`GitHub login failed: ${error.message}`);
+            throw new UnauthorizedException(error.message);
+        }
+
+        if (!data.user || !data.session) {
+            throw new UnauthorizedException('GitHub authentication failed');
+        }
+
+        this.logger.log(`GitHub login successful: ${data.user.email}`);
+        return {
+            message: 'GitHub login successful',
+            user: {
+                id: data.user.id,
+                email: data.user.email,
+                name: data.user.user_metadata?.name || data.user.user_metadata?.full_name || data.user.user_metadata?.user_name,
+                fullName: data.user.user_metadata?.name || data.user.user_metadata?.full_name,
+                avatarUrl: data.user.user_metadata?.avatar_url,
+                username: data.user.user_metadata?.user_name,
+            },
+            accessToken: data.session.access_token,
+            refreshToken: data.session.refresh_token,
+            expiresIn: data.session.expires_in,
+            expiresAt: data.session.expires_at,
+            session: data.session,
+        };
+    }
+
+    /**
+     * Exchange OAuth code for session (callback handler)
+     * Called after OAuth redirect returns with code
+     */
+    async exchangeCodeForSession(code: string) {
+        const supabase = this.supabaseService.getClient();
+
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (error) {
+            this.logger.error(`OAuth code exchange failed: ${error.message}`);
+            throw new UnauthorizedException(error.message);
+        }
+
+        if (!data.user || !data.session) {
+            throw new UnauthorizedException('OAuth authentication failed');
+        }
+
+        this.logger.log(`OAuth login successful: ${data.user.email}`);
+        return {
+            message: 'OAuth login successful',
+            user: {
+                id: data.user.id,
+                email: data.user.email,
+                name: data.user.user_metadata?.name || data.user.user_metadata?.full_name,
+                fullName: data.user.user_metadata?.name || data.user.user_metadata?.full_name,
+                avatarUrl: data.user.user_metadata?.avatar_url || data.user.user_metadata?.picture,
+                provider: data.user.app_metadata?.provider,
+            },
+            accessToken: data.session.access_token,
+            refreshToken: data.session.refresh_token,
+            expiresIn: data.session.expires_in,
+            expiresAt: data.session.expires_at,
+            session: data.session,
+        };
     }
 }

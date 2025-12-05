@@ -1,12 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { google } from '@google-cloud/aiplatform/build/protos/protos';
-import { GroundingConfigDto, GoogleSearchDto, GoogleMapsDto, UrlContextDto } from '../dto/grounding.dto';
-
-type ITool = google.cloud.aiplatform.v1.ITool;
+import {
+    GroundingConfigDto,
+    GoogleSearchDto,
+    GoogleMapsDto,
+    UrlContextDto
+} from '../dto/grounding.dto';
 
 /**
  * Grounding Service
- * Phase 3: Implements Google Search and Google Maps grounding for Vertex AI
+ * Implements Google Search, Google Maps, and URL Context grounding for Vertex AI
+ * 
+ * Supported Models:
+ * - Gemini 2.5 Pro/Flash
+ * - Gemini 2.0 Flash
+ * - Gemini 3 Pro (preview)
  */
 @Injectable()
 export class GroundingService {
@@ -14,91 +21,103 @@ export class GroundingService {
 
     /**
      * Prepare grounding tools for Vertex AI request
-     * Supports Google Search and Google Maps grounding
+     * Returns tools array in the correct format for the @google-cloud/aiplatform API
+     * 
+     * Per docs: use google_search field, format: { googleSearch: {} }
      */
-    prepareGroundingTools(groundingConfig?: GroundingConfigDto): ITool[] | undefined {
+    prepareGroundingTools(groundingConfig?: GroundingConfigDto): any[] | undefined {
         if (!groundingConfig) {
             return undefined;
         }
 
-        const tools: ITool[] = [];
+        const tools: any[] = [];
 
-        // Google Search grounding
-        // CRITICAL: Protobuf requires one_of field to be initialized
-        // Based on protobuf definition, Tool has oneof: function_declarations, retrieval, google_search_retrieval, code_execution
-        // But error said "please use google_search field instead" - this suggests a different format for Gemini
-        // Let's try using googleSearchRetrieval with minimal config as per protobuf definition
-        if (groundingConfig.googleSearch !== undefined && groundingConfig.googleSearch !== null) {
-            const tool: ITool = {
-                // Use googleSearchRetrieval field (camelCase in JS, google_search_retrieval in protobuf)
-                googleSearchRetrieval: {
-                    dynamicRetrievalConfig: {
-                        mode: 1 // MODE_DYNAMIC = 1 (enum value)
-                    }
-                }
+        // Google Search grounding - use google_search field per Vertex AI docs
+        // Format: tools: [{ googleSearch: {} }]
+        if (groundingConfig.googleSearch !== undefined && groundingConfig.googleSearch !== false) {
+            // Correct format for @google-cloud/aiplatform
+            const searchTool = {
+                google_search: {}
             };
-            
-            // Handle excludeDomains - note: this might not be supported in protobuf format
-            if (typeof groundingConfig.googleSearch === 'object' && 
-                groundingConfig.googleSearch.excludeDomains && 
-                Array.isArray(groundingConfig.googleSearch.excludeDomains) &&
-                groundingConfig.googleSearch.excludeDomains.length > 0) {
-                this.logger.warn(`excludeDomains provided but may not be supported in protobuf format: ${groundingConfig.googleSearch.excludeDomains.join(', ')}`);
+
+            // Dynamic retrieval config if specified
+            if (typeof groundingConfig.googleSearch === 'object' && groundingConfig.googleSearch !== null) {
+                if ((groundingConfig.googleSearch as any).dynamicRetrieval) {
+                    (searchTool as any).google_search.dynamic_retrieval_config = {
+                        mode: 'MODE_DYNAMIC',
+                        dynamic_threshold: 0.3
+                    };
+                }
             }
-            
-            tools.push(tool);
-            this.logger.log(`Added Google Search grounding (googleSearchRetrieval with MODE_DYNAMIC)`);
+
+            tools.push(searchTool);
+            this.logger.log('Added Google Search grounding tool (google_search)');
         }
 
-        // Google Maps grounding
-        // Google Maps grounding is supported in Gemini API
-        // Similar to Google Search, we use a retrieval tool structure
-        // Note: The protobuf types may not include googleMapsRetrieval yet,
-        // but the API supports it, so we use type assertion
-        if (groundingConfig.googleMaps !== undefined && groundingConfig.googleMaps !== null) {
-            const mapsTool: any = {
-                // Try googleMapsRetrieval field (following the same pattern as googleSearchRetrieval)
-                // If this doesn't work, the API will return an error and we can adjust
-                googleMapsRetrieval: {
-                    // Google Maps grounding configuration
-                    // enableWidget is handled in the response metadata, not in the tool config
-                }
-            };
-            
-            // If enableWidget is requested, we'll handle it in the response processing
-            if (typeof groundingConfig.googleMaps === 'object' && 
-                groundingConfig.googleMaps.enableWidget) {
-                this.logger.log('Google Maps widget enabled - widget data will be in response metadata');
-            }
-            
-            tools.push(mapsTool as ITool);
-            this.logger.log('Added Google Maps grounding (googleMapsRetrieval)');
+        // Google Maps grounding - skip for now
+        if (groundingConfig.googleMaps !== undefined) {
+            this.logger.warn('Google Maps grounding not directly supported');
         }
 
-        // URL context grounding requires Vertex AI Search setup
-        // Commenting out until proper datastore is configured
-        if (groundingConfig.urlContext && groundingConfig.urlContext.urls && groundingConfig.urlContext.urls.length > 0) {
-            this.logger.warn('URL context grounding requires Vertex AI Search datastore setup');
-            this.logger.debug(`URLs provided: ${groundingConfig.urlContext.urls.join(', ')}`);
-            // TODO: Set up Vertex AI Search datastore and uncomment below
-            /*
-            tools.push({
-                retrieval: {
-                    vertexAiSearch: {
-                        datastore: `projects/${process.env.GOOGLE_CLOUD_PROJECT}/locations/global/collections/default_collection/dataStores/default_data_store`
-                    }
-                }
-            });
-            this.logger.log(`Added URL context grounding: ${groundingConfig.urlContext.urls.length} URLs`);
-            */
+        // URL Context - skip for now  
+        if (groundingConfig.urlContext?.urls && groundingConfig.urlContext.urls.length > 0) {
+            this.logger.warn('URL Context handled separately');
         }
 
         return tools.length > 0 ? tools : undefined;
     }
 
     /**
+     * Prepare tool config with retrieval settings
+     * Used for location-aware grounding (Maps)
+     */
+    prepareToolConfig(groundingConfig?: GroundingConfigDto): any | undefined {
+        if (!groundingConfig) {
+            return undefined;
+        }
+
+        const toolConfig: any = {};
+
+        // Add retrieval config for location-based grounding
+        if (groundingConfig.googleMaps?.location || groundingConfig.retrievalConfig?.latLng) {
+            const location = groundingConfig.googleMaps?.location || groundingConfig.retrievalConfig?.latLng;
+
+            toolConfig.retrievalConfig = {
+                latLng: {
+                    latitude: location!.latitude,
+                    longitude: location!.longitude
+                }
+            };
+
+            // Add language code if specified
+            const langCode = groundingConfig.googleMaps?.languageCode || groundingConfig.retrievalConfig?.languageCode;
+            if (langCode) {
+                toolConfig.retrievalConfig.languageCode = langCode;
+            }
+
+            this.logger.log(`Added retrieval config with location: ${location!.latitude}, ${location!.longitude}`);
+        }
+
+        return Object.keys(toolConfig).length > 0 ? toolConfig : undefined;
+    }
+
+    /**
+     * Prepare URL context for content
+     * URLs are included in the prompt/content, not in tools
+     */
+    prepareUrlContextContent(urlContext?: UrlContextDto): string | undefined {
+        if (!urlContext?.urls || urlContext.urls.length === 0) {
+            return undefined;
+        }
+
+        // URLs can be referenced directly in the prompt
+        // The model will use URL Context tool to fetch content
+        return urlContext.urls.join('\n');
+    }
+
+    /**
      * Extract grounding metadata from response
-     * Returns structured metadata including search queries, chunks, and entry point
+     * Returns structured metadata including search queries, chunks, and sources
      */
     extractGroundingMetadata(response: any): any | undefined {
         if (!response.candidates || response.candidates.length === 0) {
@@ -114,45 +133,94 @@ export class GroundingService {
 
         // Structure the grounding metadata for better usability
         const result: any = {
+            // Search queries used for grounding
             webSearchQueries: metadata.webSearchQueries || [],
-            groundingChunks: (metadata.groundingChunks || []).map((chunk: any) => ({
-                uri: chunk.web?.uri || chunk.uri,
-                title: chunk.web?.title || chunk.title,
-            })),
+
+            // Grounding chunks (sources)
+            groundingChunks: this.parseGroundingChunks(metadata.groundingChunks),
+
+            // Search entry point (for displaying search suggestions)
             searchEntryPoint: metadata.searchEntryPoint,
+
+            // Grounding supports (confidence scores)
             groundingSupports: metadata.groundingSupports || [],
+
+            // Retrieval metadata
+            retrievalMetadata: metadata.retrievalMetadata,
         };
 
         // Google Maps specific metadata
         if (metadata.groundingChunks) {
-            // Extract Maps-specific data from grounding chunks
-            const mapsChunks = metadata.groundingChunks.filter((chunk: any) => 
-                chunk.retrievedContext?.uri?.startsWith('https://maps.google.com') ||
-                chunk.retrievedContext?.uri?.startsWith('https://www.google.com/maps')
-            );
-            
-            if (mapsChunks.length > 0) {
-                result.mapsChunks = mapsChunks.map((chunk: any) => ({
-                    uri: chunk.retrievedContext?.uri || chunk.uri,
-                    title: chunk.retrievedContext?.title || chunk.title,
-                }));
-            }
+            result.mapsData = this.extractMapsData(metadata.groundingChunks);
         }
 
-        // Google Maps widget data (if enableWidget was used)
-        if (metadata.groundingSupports) {
-            const mapsSupport = metadata.groundingSupports.find((support: any) => 
-                support.segment?.textSegment?.endIndex !== undefined
-            );
-            if (mapsSupport) {
-                result.mapWidget = {
-                    segment: mapsSupport.segment,
-                    confidenceScore: mapsSupport.confidenceScore,
-                };
-            }
+        // Google Maps widget context token
+        if (metadata.googleMapsWidgetContextToken) {
+            result.mapsWidgetToken = metadata.googleMapsWidgetContextToken;
+        }
+
+        // URL context metadata
+        if (candidate.urlContextMetadata) {
+            result.urlContextMetadata = candidate.urlContextMetadata;
         }
 
         return result;
+    }
+
+    /**
+     * Parse grounding chunks into structured format
+     */
+    private parseGroundingChunks(chunks: any[]): any[] {
+        if (!chunks || !Array.isArray(chunks)) {
+            return [];
+        }
+
+        return chunks.map((chunk: any) => {
+            // Web source
+            if (chunk.web) {
+                return {
+                    type: 'web',
+                    uri: chunk.web.uri,
+                    title: chunk.web.title,
+                };
+            }
+
+            // Maps source
+            if (chunk.maps) {
+                return {
+                    type: 'maps',
+                    uri: chunk.maps.uri,
+                    title: chunk.maps.title,
+                    placeId: chunk.maps.placeId,
+                    placeAnswerSources: chunk.maps.placeAnswerSources,
+                };
+            }
+
+            // Generic source
+            return {
+                type: 'unknown',
+                uri: chunk.retrievedContext?.uri || chunk.uri,
+                title: chunk.retrievedContext?.title || chunk.title,
+            };
+        });
+    }
+
+    /**
+     * Extract Google Maps specific data from grounding chunks
+     */
+    private extractMapsData(chunks: any[]): any[] {
+        if (!chunks || !Array.isArray(chunks)) {
+            return [];
+        }
+
+        return chunks
+            .filter((chunk: any) => chunk.maps)
+            .map((chunk: any) => ({
+                uri: chunk.maps.uri,
+                title: chunk.maps.title,
+                placeId: chunk.maps.placeId,
+                reviewSnippets: chunk.maps.placeAnswerSources?.reviewSnippets || [],
+            }));
     }
 
     /**
@@ -160,12 +228,22 @@ export class GroundingService {
      */
     extractSearchUrls(response: any): string[] {
         const metadata = this.extractGroundingMetadata(response);
-        if (!metadata || !metadata.groundingChunks) {
+        if (!metadata?.groundingChunks) {
             return [];
         }
+
         return metadata.groundingChunks
+            .filter((chunk: any) => chunk.type === 'web')
             .map((chunk: any) => chunk.uri)
             .filter((uri: string) => uri);
+    }
+
+    /**
+     * Extract Maps places from grounding metadata
+     */
+    extractMapsPlaces(response: any): any[] {
+        const metadata = this.extractGroundingMetadata(response);
+        return metadata?.mapsData || [];
     }
 
     /**
@@ -177,5 +255,21 @@ export class GroundingService {
             (metadata.groundingChunks && metadata.groundingChunks.length > 0) ||
             (metadata.webSearchQueries && metadata.webSearchQueries.length > 0)
         );
+    }
+
+    /**
+     * Check if response has Maps grounding
+     */
+    hasMapsGrounding(response: any): boolean {
+        const metadata = this.extractGroundingMetadata(response);
+        return !!metadata?.mapsData && metadata.mapsData.length > 0;
+    }
+
+    /**
+     * Check if response has URL context
+     */
+    hasUrlContext(response: any): boolean {
+        const metadata = this.extractGroundingMetadata(response);
+        return !!metadata?.urlContextMetadata;
     }
 }

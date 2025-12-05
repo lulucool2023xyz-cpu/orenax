@@ -523,255 +523,208 @@
                 const chatHistory = ref([]);
                 const config = reactive({
                     stream: false,
-                    thinking: false,
-                    googleSearch: false,
-                    codeExecution: false
-                });
-
-                const simplePrompt = ref('');
-
-                const imageForm = reactive({
-                    prompt: '',
-                    aspectRatio: '1:1',
-                    sampleCount: 1
-                });
-
-                // Menu Config
-                const menu = {
-                    gemini: [
-                        { id: 'gemini-chat', label: 'Chat & Tools', icon: '💬' },
-                        { id: 'gemini-simple', label: 'Simple Prompt', icon: '⚡' },
-                        { id: 'gemini-tokens', label: 'Token Counter', icon: '🔢' },
-                    ],
-                    vertex: [
-                        { id: 'vertex-image', label: 'Text to Image', icon: '🖼️' },
-                        { id: 'vertex-upscale', label: 'Upscale', icon: '🔍' },
-                        { id: 'vertex-edit', label: 'Image Edit', icon: '🎨' },
-                    ]
-                };
-
-                // Helpers
-                const highlight = (json) => {
-                    if (typeof json !== 'string') json = JSON.stringify(json, null, 2);
-                    return hljs.highlight(json, { language: 'json' }).value;
-                };
-
-                const renderMarkdown = (text) => {
-                    return marked.parse(text);
-                };
-
-                const addLog = (type, method, url, body, response, status, images = []) => {
-                    logs.value.unshift({
-                        type, method, url, body, response, status, images,
-                        time: new Date().toLocaleTimeString(),
-                        error: status >= 400
-                    });
-                };
-
-                const apiCall = async (endpoint, method = 'GET', body = null, streamCallback = null) => {
-                    isLoading.value = true;
                     const url = `${baseUrl}${endpoint}`;
                     const headers = { 'Content-Type': 'application/json' };
-                    if (token.value) headers['Authorization'] = `Bearer ${token.value}`;
+                    if(token.value) headers['Authorization'] = `Bearer ${token.value}`;
 
-                    addLog('req', method, endpoint, body, null, 'PENDING');
+                addLog('req', method, endpoint, body, null, 'PENDING');
 
-                    try {
-                        const res = await fetch(url, {
-                            method,
-                            headers,
-                            body: body ? JSON.stringify(body) : null
-                        });
+                try {
+                    const res = await fetch(url, {
+                        method,
+                        headers,
+                        body: body ? JSON.stringify(body) : null
+                    });
 
-                        if (streamCallback && res.ok) {
-                            const reader = res.body.getReader();
-                            const decoder = new TextDecoder();
-                            let fullText = '';
+                    if (streamCallback && res.ok) {
+                        const reader = res.body.getReader();
+                        const decoder = new TextDecoder();
+                        let fullText = '';
 
-                            while (true) {
-                                const { done, value } = await reader.read();
-                                if (done) break;
-                                const chunk = decoder.decode(value);
-                                streamCallback(chunk);
-                                fullText += chunk;
-                            }
-
-                            addLog('res', method, endpoint, body, { streamed: true, length: fullText.length }, res.status);
-                            return { success: true };
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            const chunk = decoder.decode(value);
+                            streamCallback(chunk);
+                            fullText += chunk;
                         }
 
-                        const data = await res.json();
-
-                        // Check for images in response
-                        let images = [];
-                        if (data.images) images = data.images;
-
-                        addLog('res', method, endpoint, body, data, res.status, images);
-
-                        if (!res.ok) throw new Error(data.message || 'Request failed');
-                        return data;
-                    } catch (e) {
-                        addLog('res', method, endpoint, body, { error: e.message }, 500);
-                        throw e;
-                    } finally {
-                        isLoading.value = false;
+                        addLog('res', method, endpoint, body, { streamed: true, length: fullText.length }, res.status);
+                        return { success: true };
                     }
-                };
 
-                // Actions
-                const checkHealth = async () => {
-                    try {
-                        const data = await apiCall('/api/v2/health');
-                        healthStatus.value = data.status;
-                    } catch (e) {
-                        healthStatus.value = 'error';
+                    const data = await res.json();
+
+                    // Check for images in response
+                    let images = [];
+                    if (data.images) images = data.images;
+
+                    addLog('res', method, endpoint, body, data, res.status, images);
+
+                    if (!res.ok) throw new Error(data.message || 'Request failed');
+                    return data;
+                } catch (e) {
+                    addLog('res', method, endpoint, body, { error: e.message }, 500);
+                    throw e;
+                } finally {
+                    isLoading.value = false;
+                }
+            };
+
+            // Actions
+            const checkHealth = async () => {
+                try {
+                    const data = await apiCall('/api/v2/health');
+                    healthStatus.value = data.status;
+                } catch (e) {
+                    healthStatus.value = 'error';
+                }
+            };
+
+            const fetchModels = async () => {
+                try {
+                    const data = await apiCall('/api/v2/models');
+                    models.value = data.models;
+                    // Set default model if available
+                    if (data.defaultModel) selectedModel.value = data.defaultModel;
+                } catch (e) { }
+            };
+
+            const handleAuth = async () => {
+                try {
+                    const endpoint = authMode.value === 'login' ? '/auth/login' : '/auth/register';
+                    const data = await apiCall(endpoint, 'POST', authForm);
+
+                    if (data.accessToken) {
+                        token.value = data.accessToken;
+                        localStorage.setItem('token', data.accessToken);
+                        await fetchUser();
+                        activeTab.value = 'gemini-chat';
                     }
+                } catch (e) {
+                    alert(e.message);
+                }
+            };
+
+            const fetchUser = async () => {
+                if (!token.value) return;
+                try {
+                    user.value = await apiCall('/auth/me');
+                } catch (e) {
+                    logout();
+                }
+            };
+
+            const logout = () => {
+                token.value = null;
+                user.value = null;
+                localStorage.removeItem('token');
+                activeTab.value = 'auth';
+            };
+
+            const sendChat = async () => {
+                if (!chatInput.value.trim()) return;
+
+                const userMsg = { role: 'user', content: chatInput.value };
+                chatHistory.value.push(userMsg);
+                const prompt = chatInput.value;
+                chatInput.value = '';
+
+                const payload = {
+                    prompt, // For simple chat, or construct messages array for full chat
+                    messages: chatHistory.value.map(m => ({ role: m.role, content: m.content })),
+                    model: selectedModel.value,
+                    stream: config.stream,
+                    thinkingConfig: config.thinking ? { includeThoughts: true, thinkingBudget: 4096 } : undefined,
+                    tools: []
                 };
 
-                const fetchModels = async () => {
-                    try {
-                        const data = await apiCall('/api/v2/models');
-                        models.value = data.models;
-                        // Set default model if available
-                        if (data.defaultModel) selectedModel.value = data.defaultModel;
-                    } catch (e) { }
-                };
+                if (config.googleSearch) payload.tools.push({ googleSearch: {} });
+                if (config.codeExecution) payload.tools.push({ codeExecution: {} });
 
-                const handleAuth = async () => {
-                    try {
-                        const endpoint = authMode.value === 'login' ? '/auth/login' : '/auth/register';
-                        const data = await apiCall(endpoint, 'POST', authForm);
+                // Add placeholder for AI response
+                const aiMsg = reactive({ role: 'model', content: '', thoughts: '' });
+                chatHistory.value.push(aiMsg);
 
-                        if (data.accessToken) {
-                            token.value = data.accessToken;
-                            localStorage.setItem('token', data.accessToken);
-                            await fetchUser();
-                            activeTab.value = 'gemini-chat';
-                        }
-                    } catch (e) {
-                        alert(e.message);
-                    }
-                };
-
-                const fetchUser = async () => {
-                    if (!token.value) return;
-                    try {
-                        user.value = await apiCall('/auth/me');
-                    } catch (e) {
-                        logout();
-                    }
-                };
-
-                const logout = () => {
-                    token.value = null;
-                    user.value = null;
-                    localStorage.removeItem('token');
-                    activeTab.value = 'auth';
-                };
-
-                const sendChat = async () => {
-                    if (!chatInput.value.trim()) return;
-
-                    const userMsg = { role: 'user', content: chatInput.value };
-                    chatHistory.value.push(userMsg);
-                    const prompt = chatInput.value;
-                    chatInput.value = '';
-
-                    const payload = {
-                        prompt, // For simple chat, or construct messages array for full chat
-                        messages: chatHistory.value.map(m => ({ role: m.role, content: m.content })),
-                        model: selectedModel.value,
-                        stream: config.stream,
-                        thinkingConfig: config.thinking ? { includeThoughts: true, thinkingBudget: 4096 } : undefined,
-                        tools: []
-                    };
-
-                    if (config.googleSearch) payload.tools.push({ googleSearch: {} });
-                    if (config.codeExecution) payload.tools.push({ codeExecution: {} });
-
-                    // Add placeholder for AI response
-                    const aiMsg = reactive({ role: 'model', content: '', thoughts: '' });
-                    chatHistory.value.push(aiMsg);
-
-                    try {
-                        if (config.stream) {
-                            await apiCall('/api/v2/chat/stream', 'POST', payload, (chunk) => {
-                                const lines = chunk.split('\n');
-                                for (const line of lines) {
-                                    if (line.startsWith('data: ')) {
-                                        const dataStr = line.replace('data: ', '');
-                                        if (dataStr === '[DONE]') break;
-                                        try {
-                                            const data = JSON.parse(dataStr);
-                                            if (data.text) aiMsg.content += data.text;
-                                            if (data.thought) aiMsg.thoughts += data.thought;
-                                        } catch (e) { }
-                                    }
+                try {
+                    if (config.stream) {
+                        await apiCall('/api/v2/chat/stream', 'POST', payload, (chunk) => {
+                            const lines = chunk.split('\n');
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    const dataStr = line.replace('data: ', '');
+                                    if (dataStr === '[DONE]') break;
+                                    try {
+                                        const data = JSON.parse(dataStr);
+                                        if (data.text) aiMsg.content += data.text;
+                                        if (data.thought) aiMsg.thoughts += data.thought;
+                                    } catch (e) { }
                                 }
-                            });
-                        } else {
-                            const data = await apiCall('/api/v2/chat/generate', 'POST', payload);
-                            aiMsg.content = data.text;
-                            if (data.thoughts) aiMsg.thoughts = data.thoughts.join('\n');
-                        }
-                    } catch (e) {
-                        aiMsg.content = `Error: ${e.message}`;
+                            }
+                        });
+                    } else {
+                        const data = await apiCall('/api/v2/chat/generate', 'POST', payload);
+                        aiMsg.content = data.text;
+                        if (data.thoughts) aiMsg.thoughts = data.thoughts.join('\n');
                     }
-                };
+                } catch (e) {
+                    aiMsg.content = `Error: ${e.message}`;
+                }
+            };
 
-                const sendSimple = async () => {
-                    try {
-                        await apiCall('/api/v2/simple', 'POST', {
-                            prompt: simplePrompt.value,
-                            model: selectedModel.value
-                        });
-                    } catch (e) { }
-                };
+            const sendSimple = async () => {
+                try {
+                    await apiCall('/api/v2/simple', 'POST', {
+                        prompt: simplePrompt.value,
+                        model: selectedModel.value
+                    });
+                } catch (e) { }
+            };
 
-                const generateImage = async () => {
-                    try {
-                        await apiCall('/api/v1/image/text-to-image', 'POST', {
-                            prompt: imageForm.prompt,
-                            model: 'imagen-3.0-generate-001',
-                            sampleCount: imageForm.sampleCount,
-                            outputOptions: { mimeType: 'image/png' }
-                        });
-                    } catch (e) { }
-                };
+            const generateImage = async () => {
+                try {
+                    await apiCall('/api/v1/image/text-to-image', 'POST', {
+                        prompt: imageForm.prompt,
+                        model: 'imagen-3.0-generate-001',
+                        sampleCount: imageForm.sampleCount,
+                        outputOptions: { mimeType: 'image/png' }
+                    });
+                } catch (e) { }
+            };
 
-                // Lifecycle
-                onMounted(async () => {
-                    await checkHealth();
+            // Lifecycle
+            onMounted(async () => {
+            await checkHealth();
                     await fetchModels();
-                    if (token.value) await fetchUser();
+                    if(token.value) await fetchUser();
                 });
 
-                // Computed
-                const getCurrentViewTitle = () => {
-                    const map = {
-                        'auth': 'Authentication',
-                        'gemini-chat': 'Gemini Chat',
-                        'gemini-simple': 'Simple Prompt',
-                        'vertex-image': 'Text to Image'
-                    };
-                    return map[activeTab.value] || activeTab.value;
-                };
+        // Computed
+        const getCurrentViewTitle = () => {
+            const map = {
+                'auth': 'Authentication',
+                'gemini-chat': 'Gemini Chat',
+                'gemini-simple': 'Simple Prompt',
+                'vertex-image': 'Text to Image'
+            };
+            return map[activeTab.value] || activeTab.value;
+        };
 
-                const getCurrentViewDesc = () => {
-                    const map = {
-                        'gemini-chat': 'Full chat capabilities with Streaming, Thinking Mode, and Tools.',
-                        'gemini-simple': 'Basic prompt-response generation.',
-                        'vertex-image': 'Generate high-quality images using Imagen 3 models.'
-                    };
-                    return map[activeTab.value] || '';
-                };
+        const getCurrentViewDesc = () => {
+            const map = {
+                'gemini-chat': 'Full chat capabilities with Streaming, Thinking Mode, and Tools.',
+                'gemini-simple': 'Basic prompt-response generation.',
+                'vertex-image': 'Generate high-quality images using Imagen 3 models.'
+            };
+            return map[activeTab.value] || '';
+        };
 
-                return {
-                    baseUrl, user, activeTab, healthStatus, isLoading, models, selectedModel, logs,
-                    authMode, authForm, chatInput, chatHistory, config, simplePrompt, imageForm, menu,
-                    highlight, renderMarkdown, handleAuth, logout, sendChat, sendSimple, generateImage,
-                    getCurrentViewTitle, getCurrentViewDesc
-                };
+        return {
+            baseUrl, user, activeTab, healthStatus, isLoading, models, selectedModel, logs,
+            authMode, authForm, chatInput, chatHistory, config, simplePrompt, imageForm, menu,
+            highlight, renderMarkdown, handleAuth, logout, sendChat, sendSimple, generateImage,
+            getCurrentViewTitle, getCurrentViewDesc
+        };
             }
         }).mount('#app');
     </script>

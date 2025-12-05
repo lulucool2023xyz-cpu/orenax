@@ -13,15 +13,15 @@
 - 🖼️ **Multimodal Support** - Image, video, audio, and PDF analysis
 - 📊 **Vertex AI Integration** - Full Vertex AI capabilities
 - 🔐 **JWT Authentication** - Secure authentication with Supabase
-- ☁️ **Google Cloud Storage** - Image generation and storage
+- ☁️ **Google Cloud Storage** - All generated media stored in GCS
 
 ## 🛠️ Tech Stack
 
 - **Framework**: NestJS 11
 - **Language**: TypeScript 5
-- **AI**: Google Gemini API, Vertex AI
+- **AI**: Google Gemini API, Vertex AI, Veo, Lyria, Imagen
 - **Auth**: JWT, Passport, Supabase
-- **Storage**: Google Cloud Storage
+- **Storage**: Google Cloud Storage, Supabase
 - **Platform**: Railway (Production)
 
 ## 🚀 Quick Start
@@ -38,8 +38,8 @@
 
 ```bash
 # Clone repository
-git clone https://github.com/lulucool2023xyz-cpu/orenax.git
-cd orenax
+git clone https://github.com/your-repo/orenax.git
+cd orenax/back_end
 
 # Install dependencies
 npm install
@@ -52,56 +52,258 @@ cp .env.example .env
 npm run start:dev
 ```
 
-### Environment Variables
+---
 
-See `.env.example` for all required variables.
+## 📡 Complete API Specification
 
-**Required:**
-- `GEMINI_API_KEY` - Your Gemini API key
-- `SUPABASE_URL` - Your Supabase project URL
-- `SUPABASE_ANON_KEY` - Supabase anon key
-- `JWT_SECRET` - Secret for JWT tokens
+### Authentication Required
+All API endpoints (except `/auth/*`) require JWT authentication.
 
-**For Vertex AI:**
-- `GOOGLE_CLOUD_PROJECT` - Your GCP project ID
-- `GOOGLE_APPLICATION_CREDENTIALS` - Path to service account JSON
+```bash
+# Include in requests
+Authorization: Bearer <your-jwt-token>
+```
 
-## 📡 API Endpoints
+---
 
-### Gemini API v2
+## 🔐 Authentication API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/auth/register` | Register new user |
+| `POST` | `/auth/login` | Login with email/password |
+| `POST` | `/auth/google` | Google OAuth login |
+| `POST` | `/auth/facebook` | Facebook OAuth login |
+| `POST` | `/auth/github` | GitHub OAuth login |
+| `GET` | `/auth/me` | Get current user |
+| `POST` | `/auth/refresh` | Refresh token |
+| `POST` | `/auth/logout` | Logout |
+
+---
+
+## ⭐ V1 Unified API (`/v1`) - NEW!
+
+Modern unified endpoints using @google/genai SDK.
+
+### Chat & Generation
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/chat` | Chat with grounding & thinking |
+| `POST` | `/v1/chat/stream` | Streaming chat |
+
+### Media Generation
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/image/generate` | Text to image (Imagen 4.0) |
+| `POST` | `/v1/image/upscale` | Upscale image |
+| `POST` | `/v1/image/edit` | Edit image with mask |
+| `POST` | `/v1/video/generate` | Text to video (Veo 3.0) |
+| `GET` | `/v1/video/status` | Video operation status |
+| `POST` | `/v1/music/generate` | Text to music (Lyria) |
+
+### TTS & Utilities
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/tts/synthesize` | Text to speech |
+| `GET` | `/v1/tts/voices` | Available voices |
+| `GET` | `/v1/prompts` | List prompts |
+| `GET` | `/v1/models` | List all models |
+| `GET` | `/v1/health` | Health check |
+
+### Chat Request Example
+```json
+{
+  "messages": [{"role": "user", "content": "Hello!"}],
+  "model": "gemini-2.5-flash",
+  "grounding": {"googleSearch": true},
+  "thinking": {"thinkingLevel": "HIGH"}
+}
+```
+
+---
+
+## 💬 Chat API v1 (`/api/v1/chat`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/chat` | Send chat message |
+| `POST` | `/api/v1/chat/count-tokens` | Count tokens |
+| `GET` | `/api/v1/chat/conversations` | List conversations |
+| `GET` | `/api/v1/chat/conversations/:id` | Get conversation |
+| `DELETE` | `/api/v1/chat/conversations/:id` | Delete conversation |
+
+### Supported Models (Chat)
+- `gemini-2.5-pro`
+- `gemini-2.5-flash`
+- `gemini-2.0-flash`
+
+### Features
+- ✅ Thinking Mode (`thinkingConfig`)
+- ✅ Google Search Grounding
+- ✅ Google Maps Grounding
+- ✅ URL Context
+- ✅ Conversation Storage (Supabase)
+
+---
+
+## 🖼️ Image API v1 (`/api/v1/image`)
+
+| Method | Endpoint | Description | Model |
+|--------|----------|-------------|-------|
+| `POST` | `/api/v1/image/text-to-image` | Generate from text | Imagen 4.0 |
+| `POST` | `/api/v1/image/image-upscale` | Upscale image | Imagen 4.0 Upscale |
+| `POST` | `/api/v1/image/image-edit` | Edit with masks | Imagen 3.0 |
+| `POST` | `/api/v1/image/image-customize` | Customize with refs | Imagen 3.0 |
+| `POST` | `/api/v1/image/virtual-try-on` | Virtual try-on | VTO Preview |
+| `POST` | `/api/v1/image/product-recontext` | Product recontxt | Imagen Recontext |
+| `POST` | `/api/v1/image/gemini-generate` | Gemini text-to-image | Gemini Flash Image |
+| `POST` | `/api/v1/image/gemini-interleaved` | Text + images | Gemini Flash Image |
+| `POST` | `/api/v1/image/gemini-edit` | Conversational edit | Gemini Flash Image |
+| `GET` | `/api/v1/image/gemini-status` | Check availability | - |
+
+### Supported Models (Image)
+- `imagen-4.0-generate-001`
+- `imagen-4.0-ultra-generate-001`
+- `imagen-3.0-generate-002`
+- `imagen-4.0-upscale-preview`
+- `gemini-2.5-flash-image`
+- `gemini-3-pro-image-preview`
+
+### Output
+All images uploaded to GCS with response:
+```json
+{
+  "success": true,
+  "model": "imagen-4.0-generate-001",
+  "images": [{
+    "url": "https://storage.googleapis.com/...",
+    "gcsUri": "gs://bucket/path/image.png",
+    "publicUrl": "https://storage.googleapis.com/...",
+    "filename": "imagen-xxx.png",
+    "mimeType": "image/png"
+  }]
+}
+```
+
+---
+
+## 🎬 Video API v1 (`/api/v1/video`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/video/text-to-video` | Generate from text |
+| `POST` | `/api/v1/video/image-to-video` | Generate from image |
+| `POST` | `/api/v1/video/extend` | Extend existing video |
+| `POST` | `/api/v1/video/interpolate` | First-last frame interpolation |
+| `POST` | `/api/v1/video/with-references` | With style/asset refs |
+| `GET` | `/api/v1/video/operation?id=xxx` | Check operation status |
+| `GET` | `/api/v1/video/status` | Service availability |
+| `GET` | `/api/v1/video/models` | List models |
+
+### Supported Models (Video)
+- `veo-3.1-generate-001`
+- `veo-3.1-fast-generate-001`
+- `veo-3.1-generate-preview`
+- `veo-3.0-generate-001`
+- `veo-2.0-generate-001`
+
+### Parameters
+- `durationSeconds`: 4-8 seconds
+- `aspectRatio`: `16:9`, `9:16`, `1:1`
+- `resolution`: `720p`, `1080p`, `4k`
+- `generateAudio`: true/false
+
+---
+
+## 🎵 Music API v1 (`/api/v1/music`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/music/generate` | Generate music from text |
+| `GET` | `/api/v1/music/status` | Service availability |
+
+### Model
+- `lyria-002`
+
+### Output
+- Format: WAV
+- Sample Rate: 48kHz
+- Duration: 32.8 seconds (fixed)
+- Type: Instrumental only
+
+### Request Example
+```json
+{
+  "prompt": "An uplifting orchestral piece with soaring strings",
+  "negativePrompt": "drums, heavy bass",
+  "seed": 12345
+}
+```
+
+---
+
+## 🎙️ Audio/TTS API v1 (`/api/v1/audio`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/audio/tts/single` | Single speaker TTS |
+| `POST` | `/api/v1/audio/tts/multi` | Multi-speaker TTS |
+| `GET` | `/api/v1/audio/tts/voices` | List voices |
+| `GET` | `/api/v1/audio/tts/status` | Service status |
+
+### Available Voices
+`Aoede`, `Charon`, `Fenrir`, `Kore` (default), `Puck`, `Zephyr`, `Harmony`, `Aurora`, `Ember`
+
+### Parameters
+- `speakingRate`: 0.25 - 4.0
+- `pitch`: -20.0 - 20.0
+- `volumeGainDb`: -96.0 - 16.0
+
+---
+
+## 🆕 API v2 (`/api/v2`) - Gemini Direct
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/v2/health` | Health check |
-| `GET` | `/api/v2/models` | List available models |
-| `POST` | `/api/v2/simple` | Simple prompt → response |
-| `POST` | `/api/v2/chat` | Full chat (streaming optional) |
-| `POST` | `/api/v2/chat/stream` | Streaming responses |
-| `POST` | `/api/v2/count-tokens` | Count tokens |
+| `GET` | `/api/v2/models` | List models |
+| `POST` | `/api/v2/simple` | Simple prompt |
+| `POST` | `/api/v2/chat` | Full chat |
+| `POST` | `/api/v2/chat/stream` | Streaming |
+| `POST` | `/api/v2/chat/generate` | Generate |
+| `POST` | `/api/v2/count-tokens` | Token count |
+| `POST` | `/api/v2/image/generate` | Image generation |
+| `POST` | `/api/v2/video/generate` | Video generation |
+| `POST` | `/api/v2/video/image-to-video` | Image to video |
+| `POST` | `/api/v2/video/extend` | Video extension |
+| `POST` | `/api/v2/video/interpolate` | Interpolation |
+| `POST` | `/api/v2/music/generate` | Music generation |
+| `POST` | `/api/v2/tts/single` | Single speaker TTS |
+| `POST` | `/api/v2/tts/multi` | Multi-speaker TTS |
+| `GET` | `/api/v2/tts/voices` | Available voices |
 
-### Example Request
+---
 
+## 🗄️ Database (Supabase)
+
+### Tables
+- `users` - User accounts
+- `conversations` - Chat conversations
+- `messages` - Chat messages
+- `generated_media` - All generated media URLs
+
+### Run Schema
 ```bash
-curl -X POST http://localhost:3001/api/v2/simple \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Hello!"}'
+# Copy SQL files from docs/06-database/ to Supabase SQL Editor
 ```
 
-## 🚂 Railway Deployment
+---
 
-### 1. Connect to GitHub
-
-1. Push your code to GitHub
-2. Go to [railway.app](https://railway.app)
-3. Click "New Project" → "Deploy from GitHub repo"
-4. Select your repository
-
-### 2. Configure Environment Variables
-
-In Railway dashboard, add these variables:
+## ⚙️ Environment Variables
 
 ```env
-NODE_ENV=production
+# Required
+NODE_ENV=development
 PORT=3001
 
 # Supabase
@@ -112,86 +314,76 @@ SUPABASE_SERVICE_ROLE_KEY=your-key
 # JWT
 JWT_SECRET=your-secret
 
-# Gemini
+# Gemini API
 GEMINI_API_KEY=your-api-key
 
-# Google Cloud (Base64 encoded service account JSON)
-GOOGLE_CREDENTIALS_JSON=base64-encoded-json
+# Google Cloud
 GOOGLE_CLOUD_PROJECT=your-project-id
+GOOGLE_APPLICATION_CREDENTIALS=./creds.json
+VERTEX_AI_LOCATION=us-central1
+
+# GCS (optional)
+GCS_BUCKET_NAME=your-bucket
+GCS_IMAGE_PATH=generated-images
+GCS_ENABLE_PUBLIC_ACCESS=true
 ```
 
-### 3. Encode Service Account for Railway
-
-```bash
-# On Mac/Linux
-base64 -i service-account-key.json | tr -d '\n'
-
-# On Windows PowerShell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("service-account-key.json"))
-```
-
-Copy the output and set as `GOOGLE_CREDENTIALS_JSON` in Railway.
-
-### 4. Deploy
-
-Railway will automatically build and deploy. Your app will be available at:
-`https://your-app.railway.app`
+---
 
 ## 📁 Project Structure
 
 ```
 src/
-├── auth/           # Authentication module
-├── chat/           # Legacy chat endpoints
-├── gemini/         # Legacy Gemini service
-├── gemini-api/     # NEW: Gemini API v2
-│   ├── config/     # Configuration
-│   ├── dto/        # Data Transfer Objects
-│   ├── services/   # Core services
-│   └── types/      # TypeScript types
-├── image/          # Image generation
-├── supabase/       # Supabase integration
-├── vertex-ai/      # Vertex AI integration
-├── bootstrap.ts    # Production bootstrap
-└── main.ts         # Application entry
+├── auth/           # Authentication
+├── audio/          # TTS endpoints (v1)
+├── chat/           # Chat endpoints (v1)
+├── gemini/         # Legacy Gemini
+├── gemini-api/     # Gemini API v2
+├── image/          # Image endpoints (v1)
+├── music/          # Music endpoints (v1)
+├── supabase/       # Supabase service
+├── vertex-ai/      # All Vertex AI services
+│   ├── services/
+│   │   ├── generation.service.ts
+│   │   ├── image.service.ts
+│   │   ├── video.service.ts
+│   │   ├── music.service.ts
+│   │   ├── tts.service.ts
+│   │   └── gcs-storage.service.ts
+│   └── dto/
+├── video/          # Video endpoints (v1)
+└── app.module.ts   # Main module
 ```
+
+---
 
 ## 📚 Documentation
 
-- [API Reference](/docs/gemini-api-v2/API-REFERENCE.md)
-- [Vertex AI Docs](/docs/vertex-ai/)
-- [Testing Guide](/docs/testing/)
+See `/docs` folder:
+- `01-setup/` - Setup guides
+- `02-authentication/` - Auth docs
+- `03-chat-api/` - Chat API docs
+- `04-media-api/` - Media API docs
+- `06-database/` - SQL schemas
+- `07-testing/` - Test guides
+
+---
 
 ## 🔧 Development
 
 ```bash
-# Development mode
-npm run start:dev
-
-# Build
-npm run build
-
-# Production mode
-npm run start:prod
-
-# Run tests
-npm run test
-
-# Lint
-npm run lint
+npm run start:dev   # Development
+npm run build       # Build
+npm run start:prod  # Production
+npm run test        # Tests
+npm run lint        # Lint
 ```
+
+---
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
-## 👥 Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push branch (`git push origin feature/amazing`)
-5. Open Pull Request
+MIT License
 
 ---
 

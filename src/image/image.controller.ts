@@ -1,6 +1,7 @@
 import {
     Controller,
     Post,
+    Get,
     Body,
     UseGuards,
     HttpCode,
@@ -15,6 +16,7 @@ import {
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ImageService } from '../vertex-ai/services/image.service';
+import { GeminiImageService } from '../vertex-ai/services/gemini-image.service';
 import {
     TextToImageDto,
     ImageUpscaleDto,
@@ -23,6 +25,12 @@ import {
     VirtualTryOnDto,
     ProductRecontextDto,
 } from '../vertex-ai/dto/image-request.dto';
+import {
+    GeminiImageGenerateDto,
+    GeminiInterleavedGenerateDto,
+    GeminiImageEditDto,
+    GeminiMultiTurnEditDto,
+} from '../vertex-ai/dto/gemini-image.dto';
 import { ImageUploadUtil } from './utils/image-upload.util';
 
 /**
@@ -33,7 +41,10 @@ import { ImageUploadUtil } from './utils/image-upload.util';
 @Controller('api/v1/image')
 @UseGuards(JwtAuthGuard)
 export class ImageController {
-    constructor(private readonly imageService: ImageService) {}
+    constructor(
+        private readonly imageService: ImageService,
+        private readonly geminiImageService: GeminiImageService,
+    ) { }
 
     /**
      * POST /api/v1/image/text-to-image
@@ -176,5 +187,67 @@ export class ImageController {
 
         return this.imageService.productRecontext(dto);
     }
-}
 
+    // ============================================
+    // GEMINI IMAGE GENERATION ENDPOINTS
+    // ============================================
+
+    /**
+     * POST /api/v1/image/gemini-generate
+     * Generate image from text prompt using Gemini native image generation
+     */
+    @Post('gemini-generate')
+    @HttpCode(HttpStatus.OK)
+    async geminiGenerateImage(@Body() dto: GeminiImageGenerateDto) {
+        return this.geminiImageService.generateImage(dto);
+    }
+
+    /**
+     * POST /api/v1/image/gemini-interleaved
+     * Generate interleaved text and images (e.g., illustrated recipes)
+     */
+    @Post('gemini-interleaved')
+    @HttpCode(HttpStatus.OK)
+    async geminiInterleavedGenerate(@Body() dto: GeminiInterleavedGenerateDto) {
+        return this.geminiImageService.generateInterleaved(dto);
+    }
+
+    /**
+     * POST /api/v1/image/gemini-edit
+     * Edit an image using conversational prompts
+     */
+    @Post('gemini-edit')
+    @HttpCode(HttpStatus.OK)
+    async geminiEditImage(@Body() dto: GeminiImageEditDto) {
+        return this.geminiImageService.editImage(dto);
+    }
+
+    /**
+     * POST /api/v1/image/gemini-multi-turn-edit
+     * Multi-turn image editing with context preservation
+     */
+    @Post('gemini-multi-turn-edit')
+    @HttpCode(HttpStatus.OK)
+    async geminiMultiTurnEdit(@Body() dto: GeminiMultiTurnEditDto) {
+        return this.geminiImageService.multiTurnEdit(dto);
+    }
+
+    /**
+     * GET /api/v1/image/gemini-status
+     * Check Gemini image generation availability
+     */
+    @Get('gemini-status')
+    @HttpCode(HttpStatus.OK)
+    geminiStatus() {
+        return {
+            available: this.geminiImageService.isConfigured(),
+            supportedModels: this.geminiImageService.getSupportedModels(),
+            features: {
+                textToImage: true,
+                interleavedGeneration: true,
+                imageEditing: true,
+                multiTurnEditing: true,
+            },
+        };
+    }
+}

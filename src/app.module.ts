@@ -9,6 +9,9 @@ import { SupabaseModule } from './supabase/supabase.module';
 import { VertexAiModule } from './vertex-ai/vertex-ai.module';
 import { ChatModule } from './chat/chat.module';
 import { ImageModule } from './image/image.module';
+import { VideoModule } from './video/video.module';
+import { MusicModule } from './music/music.module';
+import { AudioModule } from './audio/audio.module';
 
 @Module({
   imports: [
@@ -19,9 +22,12 @@ import { ImageModule } from './image/image.module';
     VertexAiModule,
     AuthModule,
     GeminiModule,
-    GeminiApiModule,  // New Gemini API v2 module
-    ChatModule,
-    ImageModule,
+    GeminiApiModule,  // Gemini API v2 module
+    ChatModule,       // Chat API v1
+    ImageModule,      // Image API v1
+    VideoModule,      // Video API v1
+    MusicModule,      // Music API v1 (Lyria)
+    AudioModule,      // Audio/TTS API v1
   ],
   controllers: [AppController],
   providers: [AppService],
