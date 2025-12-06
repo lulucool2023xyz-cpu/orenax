@@ -36,6 +36,7 @@ async function bootstrap() {
       'https://orenax.netlify.app',
       'https://artificial-production.up.railway.app',
       'https://orenax-production.up.railway.app',
+      'http://localhost:59873',
     ];
 
   app.enableCors({
