@@ -7,6 +7,8 @@ import { GoogleLoginDto } from './dto/google-login.dto';
 import { FacebookLoginDto } from './dto/facebook-login.dto';
 import { GitHubLoginDto } from './dto/github-login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -136,5 +138,29 @@ export class AuthController {
     @Post('refresh')
     async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
         return this.authService.refreshToken(refreshTokenDto);
+    }
+
+    /**
+     * Request password reset email
+     */
+    @HttpCode(HttpStatus.OK)
+    @Post('forgot-password')
+    async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+        return this.authService.forgotPassword(
+            forgotPasswordDto.email,
+            forgotPasswordDto.redirectTo,
+        );
+    }
+
+    /**
+     * Update password with token from reset email
+     */
+    @HttpCode(HttpStatus.OK)
+    @Post('update-password')
+    async updatePassword(@Body() updatePasswordDto: UpdatePasswordDto) {
+        return this.authService.updatePassword(
+            updatePasswordDto.accessToken,
+            updatePasswordDto.newPassword,
+        );
     }
 }

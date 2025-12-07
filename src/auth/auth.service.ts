@@ -318,6 +318,66 @@ export class AuthService {
     }
 
     /**
+     * Send password reset email via Supabase
+     */
+    async forgotPassword(email: string, redirectTo?: string) {
+        const supabase = this.supabaseService.getClient();
+        const defaultRedirect = this.configService.get<string>('OAUTH_REDIRECT_URL') ||
+            `${this.configService.get<string>('APP_URL', 'http://localhost:5173')}/auth/reset-password`;
+
+        this.logger.log(`Sending password reset email to: ${email}`);
+
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: redirectTo || defaultRedirect,
+        });
+
+        if (error) {
+            this.logger.error(`Password reset failed: ${error.message}`);
+            // Don't reveal if email exists or not for security
+            // Always return success message
+        }
+
+        return {
+            message: 'If an account exists with this email, you will receive a password reset link.',
+            success: true,
+        };
+    }
+
+    /**
+     * Update user password (used after reset link is clicked)
+     */
+    async updatePassword(accessToken: string, newPassword: string) {
+        const supabase = this.supabaseService.getClient();
+
+        // Set session with the access token from reset link
+        const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: '', // Not needed for password update
+        });
+
+        if (sessionError) {
+            this.logger.error(`Session error: ${sessionError.message}`);
+            throw new UnauthorizedException('Invalid or expired reset token');
+        }
+
+        // Update the password
+        const { data, error } = await supabase.auth.updateUser({
+            password: newPassword,
+        });
+
+        if (error) {
+            this.logger.error(`Password update failed: ${error.message}`);
+            throw new BadRequestException(error.message);
+        }
+
+        this.logger.log(`Password updated successfully for user: ${data.user?.email}`);
+        return {
+            message: 'Password updated successfully',
+            success: true,
+        };
+    }
+
+    /**
      * Generate OAuth URL for Google login via Supabase
      * Frontend should redirect user to this URL
      */
