@@ -1353,7 +1353,7 @@ const searchResponse = await fetch('http://localhost:3001/api/v2/chat/generate',
     tools: [{ googleSearch: {} }]
   })
 });
-const searchData = await searchResponse.json();
+const searchData = await searchResponse.json(       );
 console.log('Answer:', searchData.text);
 console.log('Sources:', searchData.groundingMetadata?.groundingChunks);
 
