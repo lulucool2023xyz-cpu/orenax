@@ -35,6 +35,9 @@ export class GeminiStreamingService {
         let usageMetadata: any;
         let finishReason: string | undefined;
 
+        let groundingMetadata: any;
+        let thoughts: string[] = [];
+
         try {
             // Stream chunks from generation service
             for await (const chunk of this.generationService.generateContentStream(request)) {
@@ -43,13 +46,21 @@ export class GeminiStreamingService {
                     fullResponseText += chunk.text;
                 }
 
-                // Send SSE event
+                // Accumulate thoughts
+                if (chunk.thought) {
+                    thoughts.push(chunk.thought);
+                }
+
+                // Send SSE event with all available data
                 const data = JSON.stringify({
                     text: chunk.text,
                     thought: chunk.thought,
                     done: chunk.done,
                     finishReason: chunk.finishReason,
                     usageMetadata: chunk.usageMetadata,
+                    functionCall: chunk.functionCall,
+                    groundingMetadata: chunk.groundingMetadata,
+                    codeExecutionResult: chunk.codeExecutionResult,
                 });
 
                 res.write(`data: ${data}\n\n`);
@@ -58,10 +69,12 @@ export class GeminiStreamingService {
                 if (chunk.done) {
                     usageMetadata = chunk.usageMetadata;
                     finishReason = chunk.finishReason;
+                    groundingMetadata = chunk.groundingMetadata;
                     res.write('data: [DONE]\n\n');
                     break;
                 }
             }
+
 
             res.end();
 

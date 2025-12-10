@@ -74,6 +74,7 @@ export class TtsService {
 
     /**
      * Generate single-speaker audio from text
+     * Uses proper Gemini TTS config with speechConfig and responseModalities
      */
     async generateSingleSpeaker(dto: SingleSpeakerTtsDto): Promise<TtsResponse> {
         if (!this.genAI) {
@@ -98,23 +99,35 @@ export class TtsService {
             const modelName = dto.model || this.defaultModel;
             this.logger.log(`Generating TTS with model: ${modelName}, voice: ${dto.voiceName}`);
 
+            // Use proper TTS configuration per Google docs
             const model = this.genAI.getGenerativeModel({
                 model: modelName,
+                generationConfig: {
+                    responseModalities: ['AUDIO'],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: {
+                                voiceName: dto.voiceName,
+                            },
+                        },
+                    },
+                } as any,
             });
 
-            // Build prompt with voice instructions
-            const prompt = `[Voice: ${dto.voiceName}] ${dto.text}`;
-            const result = await model.generateContent(prompt);
+            // Generate content with text input
+            const result = await model.generateContent(dto.text);
             const response = result.response;
 
-            // Try to extract audio data from response
+            // Extract audio data from response
             let audioData: string | undefined;
+            let mimeType = 'audio/wav';
             if (response.candidates && response.candidates.length > 0) {
                 for (const candidate of response.candidates) {
                     if (candidate.content?.parts) {
                         for (const part of candidate.content.parts) {
                             if ((part as any).inlineData) {
                                 audioData = (part as any).inlineData.data;
+                                mimeType = (part as any).inlineData.mimeType || 'audio/wav';
                                 break;
                             }
                         }
@@ -125,7 +138,7 @@ export class TtsService {
 
             // If no audio in response, return text response with message
             if (!audioData) {
-                this.logger.warn('TTS model did not return audio. TTS preview models may not be available.');
+                this.logger.warn('TTS model did not return audio. TTS preview models may not be available yet.');
                 return {
                     text: dto.text,
                     voice: dto.voiceName,
@@ -133,6 +146,7 @@ export class TtsService {
                     generatedAt: new Date().toISOString(),
                 };
             }
+
 
             // Upload to GCS if requested
             let url: string | undefined;
@@ -192,6 +206,7 @@ export class TtsService {
 
     /**
      * Generate multi-speaker audio from text
+     * Uses speechConfig with multiSpeakerMarkup for dialogue-style TTS
      */
     async generateMultiSpeaker(dto: MultiSpeakerTtsDto): Promise<TtsResponse> {
         if (!this.genAI) {
@@ -233,27 +248,45 @@ export class TtsService {
             const modelName = dto.model || this.defaultModel;
             this.logger.log(`Generating multi-speaker TTS with model: ${modelName}`);
 
+            // Build speaker voice configs for multiSpeakerMarkup
+            const speakerVoiceConfigs: Record<string, any> = {};
+            for (const speaker of dto.speakers) {
+                speakerVoiceConfigs[speaker.name] = {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: {
+                            voiceName: speaker.voiceName,
+                        },
+                    },
+                };
+            }
+
+            // Use proper TTS configuration for multi-speaker
             const model = this.genAI.getGenerativeModel({
                 model: modelName,
+                generationConfig: {
+                    responseModalities: ['AUDIO'],
+                    speechConfig: {
+                        multiSpeakerMarkup: {
+                            speakerVoiceConfigs,
+                        },
+                    },
+                } as any,
             });
 
-            // Build multi-speaker prompt with voice assignments
-            const voiceAssignments = dto.speakers
-                .map(s => `${s.name}: ${s.voiceName}`)
-                .join(', ');
-            const prompt = `[Multi-speaker audio with voices: ${voiceAssignments}]\n\n${dto.text}`;
-
-            const result = await model.generateContent(prompt);
+            // Generate content with text input
+            const result = await model.generateContent(dto.text);
             const response = result.response;
 
-            // Try to extract audio data from response
+            // Extract audio data from response
             let audioData: string | undefined;
+            let mimeType = 'audio/wav';
             if (response.candidates && response.candidates.length > 0) {
                 for (const candidate of response.candidates) {
                     if (candidate.content?.parts) {
                         for (const part of candidate.content.parts) {
                             if ((part as any).inlineData) {
                                 audioData = (part as any).inlineData.data;
+                                mimeType = (part as any).inlineData.mimeType || 'audio/wav';
                                 break;
                             }
                         }

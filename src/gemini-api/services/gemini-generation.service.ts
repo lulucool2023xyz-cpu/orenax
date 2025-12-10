@@ -114,6 +114,7 @@ export class GeminiGenerationService {
 
     /**
      * Generate content stream (returns async generator)
+     * Supports thinking, tools, grounding, and function calling
      */
     async *generateContentStream(
         request: GeminiChatRequestDto,
@@ -123,6 +124,9 @@ export class GeminiGenerationService {
         done: boolean;
         finishReason?: FinishReason;
         usageMetadata?: any;
+        functionCall?: { name: string; args: Record<string, unknown> };
+        groundingMetadata?: any;
+        codeExecutionResult?: any;
     }> {
         try {
             // Validate API key
@@ -165,6 +169,16 @@ export class GeminiGenerationService {
                 modelOptions.generationConfig = generationConfig;
             }
 
+            // Add tools if provided (Google Search, Code Execution, Function Calling)
+            if (request.tools && request.tools.length > 0) {
+                modelOptions.tools = request.tools;
+            }
+
+            // Add tool config if provided
+            if (request.toolConfig) {
+                modelOptions.toolConfig = request.toolConfig;
+            }
+
             this.logger.debug(`Streaming content with model: ${modelId}`);
 
             // Get model from genAI client
@@ -174,28 +188,85 @@ export class GeminiGenerationService {
             // Prepare contents/prompt
             const contents = this.prepareContents(request);
 
+            // Build request options with thinkingConfig if provided
+            const requestOptions: any = typeof contents === 'string'
+                ? contents
+                : { contents };
+
+            // Add thinkingConfig for thinking models
+            if (request.thinkingConfig && typeof requestOptions === 'object') {
+                requestOptions.generationConfig = {
+                    ...requestOptions.generationConfig,
+                    ...this.buildThinkingConfig(request.thinkingConfig, modelId),
+                };
+            }
+
             // Call Gemini API with streaming
             let streamingResponse: any;
-            if (typeof contents === 'string') {
-                streamingResponse = await model.generateContentStream(contents);
+            if (typeof requestOptions === 'string') {
+                streamingResponse = await model.generateContentStream(requestOptions);
             } else {
-                streamingResponse = await model.generateContentStream({ contents });
+                streamingResponse = await model.generateContentStream(requestOptions);
             }
 
             // Yield chunks
             for await (const chunk of streamingResponse.stream) {
-                const text = chunk.text();
                 const candidates = chunk.candidates;
+                const candidate = candidates?.[0];
+                const parts = candidate?.content?.parts || [];
+
+                // Extract text and thoughts from parts
+                let textContent: string | undefined;
+                let thoughtContent: string | undefined;
+                let functionCall: any | undefined;
+                let codeExecutionResult: any | undefined;
+
+                for (const part of parts) {
+                    // Check if it's a thought part (thinking mode)
+                    if (part.thought === true && part.text) {
+                        thoughtContent = (thoughtContent || '') + part.text;
+                    } else if (part.text) {
+                        textContent = (textContent || '') + part.text;
+                    }
+
+                    // Check for function calls
+                    if (part.functionCall) {
+                        functionCall = {
+                            name: part.functionCall.name,
+                            args: part.functionCall.args,
+                        };
+                    }
+
+                    // Check for code execution
+                    if (part.executableCode || part.codeExecutionResult) {
+                        codeExecutionResult = {
+                            code: part.executableCode?.code,
+                            language: part.executableCode?.language,
+                            output: part.codeExecutionResult?.output,
+                        };
+                    }
+                }
+
+                // Fallback to chunk.text() if no parts extracted
+                if (!textContent && !thoughtContent) {
+                    try {
+                        textContent = chunk.text();
+                    } catch {
+                        // text() might throw if no text
+                    }
+                }
 
                 // Check for finish reason
-                const finishReason = candidates?.[0]?.finishReason as FinishReason;
+                const finishReason = candidate?.finishReason as FinishReason;
 
                 yield {
-                    text: text || undefined,
-                    thought: undefined,
+                    text: textContent,
+                    thought: thoughtContent,
                     done: !!finishReason,
                     finishReason,
                     usageMetadata: undefined,
+                    functionCall,
+                    codeExecutionResult,
                 };
 
                 if (finishReason) {
@@ -203,19 +274,56 @@ export class GeminiGenerationService {
                 }
             }
 
-            // Get the final aggregated response for usage metadata
+            // Get the final aggregated response for usage metadata and grounding
             const finalResponse = await streamingResponse.response;
-            if (finalResponse.usageMetadata) {
-                yield {
-                    done: true,
-                    usageMetadata: finalResponse.usageMetadata,
-                };
-            }
+            const finalCandidate = finalResponse.candidates?.[0];
+
+            yield {
+                done: true,
+                usageMetadata: finalResponse.usageMetadata,
+                groundingMetadata: finalCandidate?.groundingMetadata,
+            };
         } catch (error) {
             this.logger.error('Error in streaming:', error);
             throw this.handleError(error);
         }
     }
+
+    /**
+     * Build thinking config for thinking models
+     */
+    private buildThinkingConfig(thinkingConfig: any, modelId: string): any {
+        const config: any = {};
+
+        // For Gemini 3 models (thinkingLevel)
+        if (modelId.includes('gemini-3')) {
+            if (thinkingConfig.thinkingLevel) {
+                config.thinkingConfig = {
+                    thinkingLevel: thinkingConfig.thinkingLevel,
+                };
+            }
+        }
+        // For Gemini 2.5 models (thinkingBudget)
+        else if (modelId.includes('gemini-2.5')) {
+            if (thinkingConfig.thinkingBudget !== undefined) {
+                config.thinkingConfig = {
+                    thinkingBudget: thinkingConfig.thinkingBudget,
+                };
+            }
+        }
+
+        // Include thoughts in response if requested
+        if (thinkingConfig.includeThoughts) {
+            config.thinkingConfig = {
+                ...config.thinkingConfig,
+                includeThoughts: true,
+            };
+        }
+
+        return config;
+    }
+
+
 
     /**
      * Count tokens
