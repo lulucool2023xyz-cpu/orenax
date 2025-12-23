@@ -17,6 +17,7 @@ Complete documentation for OrenaX Backend API V2 using **Gemini API**.
 | `/api/v2/tts/single` | POST | Single speaker TTS |
 | `/api/v2/tts/multi` | POST | Multi-speaker TTS |
 | `/api/v2/tts/voices` | GET | List voices |
+| `ws://host/live` | WebSocket | Live API (real-time audio/video) |
 
 ## 📚 Documentation Files
 
@@ -29,6 +30,7 @@ Complete documentation for OrenaX Backend API V2 using **Gemini API**.
 | [video-guide.md](./video-guide.md) | Video generation (Veo) |
 | [music-guide.md](./music-guide.md) | Music generation (Lyria) |
 | [tts-guide.md](./tts-guide.md) | Text-to-Speech |
+| [live-api-guide.md](./live-api-guide.md) | Live API (real-time voice/video) |
 | [frontend-guide.md](./frontend-guide.md) | Complete Vite/TSX integration |
 
 ---
@@ -367,5 +369,11 @@ export interface VoiceInfo {
 
 ### TTS Models
 | Model | Description |
-|-------|-------------|
+|-------|--------------|
 | `gemini-2.5-flash-preview-tts` | 30 voices, 24kHz |
+
+### Live API Models
+| Model | Description |
+|-------|--------------|
+| `gemini-2.5-flash-native-audio-preview` | Real-time audio streaming |
+| `gemini-live-2.5-flash-preview` | Live API optimized |
