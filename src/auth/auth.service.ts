@@ -28,14 +28,15 @@ export class AuthService {
         }
 
         try {
-            // Try to use Admin client to auto-confirm user
+            // Try to use Admin client to register user
             const supabaseAdmin = this.supabaseService.getAdminClient();
 
-            // Create user with admin privileges (auto confirm email)
+            // Create user with admin privileges but WITHOUT auto-confirm
+            // This ensures the user receives an email verification link
             const { data: adminData, error: adminError } = await supabaseAdmin.auth.admin.createUser({
                 email,
                 password,
-                email_confirm: true, // Auto confirm email
+                email_confirm: false, // DO NOT auto confirm - enforce email verification
                 user_metadata: { name: finalName }
             });
 
@@ -47,39 +48,20 @@ export class AuthService {
                 throw new BadRequestException('Registration failed');
             }
 
-            // Immediately login to get tokens
-            const { data: loginData, error: loginError } = await this.supabaseService.getClient().auth.signInWithPassword({
-                email,
-                password,
-            });
+            this.logger.log(`User registered successfully (pending verification): ${email}`);
 
-            if (loginError) {
-                // If login fails but registration succeeded, return user without session
-                return {
-                    message: 'Registration successful. Please login.',
-                    user: {
-                        id: adminData.user.id,
-                        email: adminData.user.email,
-                        name: adminData.user.user_metadata?.name,
-                    },
-                    session: null,
-                };
-            }
-
-            this.logger.log(`User registered successfully: ${loginData.user.email}`);
+            // Return success message without session tokens
+            // User must check email to verify account
             return {
-                message: 'Registration successful',
+                message: 'Registration successful. Please check your email for verification link.',
                 user: {
-                    id: loginData.user.id,
-                    email: loginData.user.email,
-                    name: loginData.user.user_metadata?.name,
-                    fullName: loginData.user.user_metadata?.name,
+                    id: adminData.user.id,
+                    email: adminData.user.email,
+                    name: adminData.user.user_metadata?.name,
+                    fullName: adminData.user.user_metadata?.name,
+                    emailVerified: false
                 },
-                accessToken: loginData.session.access_token,
-                refreshToken: loginData.session.refresh_token,
-                expiresIn: loginData.session.expires_in,
-                expiresAt: loginData.session.expires_at,
-                session: loginData.session,
+                requireVerification: true
             };
 
         } catch (e) {
@@ -103,7 +85,8 @@ export class AuthService {
                         email: data.user?.email,
                         name: data.user?.user_metadata?.name,
                     },
-                    session: data.session,
+                    session: data.session, // Session might be null if email confirmation is required
+                    requireVerification: !data.session
                 };
             }
             throw e;
@@ -543,5 +526,125 @@ export class AuthService {
             expiresAt: data.session.expires_at,
             session: data.session,
         };
+    }
+
+    // ============================================
+    // EMAIL VERIFICATION (API v2)
+    // ============================================
+
+    // Simple in-memory rate limiting (in production, use Redis)
+    private verificationRateLimit: Map<string, number> = new Map();
+
+    /**
+     * Resend email verification
+     */
+    async resendVerificationEmail(email: string): Promise<{
+        success: boolean;
+        message: string;
+        retryAfter?: number;
+    }> {
+        if (!email) {
+            throw new BadRequestException({
+                error: true,
+                code: 'EMAIL_REQUIRED',
+                message: 'Email wajib diisi',
+            });
+        }
+
+        // Check rate limit (60 seconds)
+        const lastSent = this.verificationRateLimit.get(email);
+        if (lastSent && Date.now() - lastSent < 60000) {
+            const retryAfter = Math.ceil((60000 - (Date.now() - lastSent)) / 1000);
+            throw new BadRequestException({
+                error: true,
+                code: 'RATE_LIMITED',
+                message: `Tunggu ${retryAfter} detik sebelum mencoba lagi`,
+            });
+        }
+
+        const supabase = this.supabaseService.getClient();
+
+        try {
+            // Check if user exists and is not verified
+            const { data: userData } = await this.supabaseService
+                .getAdminClient()
+                .auth.admin.listUsers();
+
+            const user = userData.users.find(u => u.email === email);
+
+            if (!user) {
+                throw new BadRequestException({
+                    error: true,
+                    code: 'USER_NOT_FOUND',
+                    message: 'Email tidak terdaftar',
+                });
+            }
+
+            if (user.email_confirmed_at) {
+                throw new BadRequestException({
+                    error: true,
+                    code: 'ALREADY_VERIFIED',
+                    message: 'Email sudah terverifikasi',
+                });
+            }
+
+            // Resend verification email
+            const { error } = await supabase.auth.resend({
+                type: 'signup',
+                email,
+            });
+
+            if (error) {
+                this.logger.error(`Failed to resend verification: ${error.message}`);
+                throw new BadRequestException(error.message);
+            }
+
+            // Update rate limit
+            this.verificationRateLimit.set(email, Date.now());
+
+            this.logger.log(`Verification email resent to: ${email}`);
+            return {
+                success: true,
+                message: 'Email verifikasi telah dikirim',
+                retryAfter: 60,
+            };
+        } catch (error) {
+            if (error instanceof BadRequestException) throw error;
+            this.logger.error(`Failed to resend verification: ${error.message}`);
+            throw new BadRequestException('Gagal mengirim email verifikasi');
+        }
+    }
+
+    /**
+     * Verify email token and redirect
+     */
+    async verifyEmail(token: string, res: any): Promise<void> {
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') ||
+            this.configService.get<string>('APP_URL', 'http://localhost:5173');
+
+        if (!token) {
+            return res.redirect(`${frontendUrl}/auth/callback?verified=false&error=INVALID_TOKEN`);
+        }
+
+        try {
+            const supabase = this.supabaseService.getClient();
+
+            // Verify the token
+            const { error } = await supabase.auth.verifyOtp({
+                token_hash: token,
+                type: 'email',
+            });
+
+            if (error) {
+                this.logger.error(`Email verification failed: ${error.message}`);
+                return res.redirect(`${frontendUrl}/auth/callback?verified=false&error=INVALID_TOKEN`);
+            }
+
+            this.logger.log('Email verified successfully');
+            return res.redirect(`${frontendUrl}/auth/callback?verified=true`);
+        } catch (error) {
+            this.logger.error(`Email verification error: ${error.message}`);
+            return res.redirect(`${frontendUrl}/auth/callback?verified=false&error=SERVER_ERROR`);
+        }
     }
 }

@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { SupabaseModule } from '../supabase/supabase.module';
+import { OAuthService, EmailAuthService } from './services';
 
 @Module({
     imports: [
@@ -23,7 +24,7 @@ import { SupabaseModule } from '../supabase/supabase.module';
         }),
     ],
     controllers: [AuthController],
-    providers: [AuthService, JwtStrategy],
-    exports: [AuthService],
+    providers: [AuthService, JwtStrategy, OAuthService, EmailAuthService],
+    exports: [AuthService, OAuthService, EmailAuthService],
 })
 export class AuthModule { }

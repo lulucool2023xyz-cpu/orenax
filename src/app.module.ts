@@ -7,11 +7,18 @@ import { GeminiModule } from './gemini/gemini.module';
 import { GeminiApiModule } from './gemini-api/gemini-api.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { VertexAiModule } from './vertex-ai/vertex-ai.module';
+import { AiProviderModule } from './ai-core';
 import { ChatModule } from './chat/chat.module';
 import { ImageModule } from './image/image.module';
 import { VideoModule } from './video/video.module';
 import { MusicModule } from './music/music.module';
 import { AudioModule } from './audio/audio.module';
+// Frontend Integration API v2 modules
+import { PaymentModule } from './payment/payment.module';
+import { MediaModule } from './media/media.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
+import { ShareModule } from './share/share.module';
+import { PromptsModule } from './prompts/prompts.module';
 
 @Module({
   imports: [
@@ -20,6 +27,7 @@ import { AudioModule } from './audio/audio.module';
     }),
     SupabaseModule,
     VertexAiModule,
+    AiProviderModule,
     AuthModule,
     GeminiModule,
     GeminiApiModule,  // Gemini API v2 module
@@ -28,6 +36,12 @@ import { AudioModule } from './audio/audio.module';
     VideoModule,      // Video API v1
     MusicModule,      // Music API v1 (Lyria)
     AudioModule,      // Audio/TTS API v1
+    // Frontend Integration API v2 modules
+    PaymentModule,    // Payment & Subscription
+    MediaModule,      // Media History/Gallery
+    ApiKeysModule,    // User API Keys
+    ShareModule,      // Chat Sharing
+    PromptsModule,    // Prompt Marketplace
   ],
   controllers: [AppController],
   providers: [AppService],

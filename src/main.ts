@@ -5,6 +5,7 @@ import { join } from 'path';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { bootstrapProduction } from './bootstrap';
+import { AiExceptionFilter } from './ai-core/filters/ai-exception.filter';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -59,6 +60,9 @@ async function bootstrap() {
       },
     }),
   );
+
+  // Apply global AI exception filter
+  app.useGlobalFilters(new AiExceptionFilter());
 
   // Use PORT from environment (Railway provides this)
   const port = process.env.PORT || 3001;

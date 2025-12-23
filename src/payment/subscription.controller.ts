@@ -1,0 +1,36 @@
+import {
+    Controller,
+    Get,
+    HttpCode,
+    HttpStatus,
+    UseGuards,
+    Req,
+    Logger,
+} from '@nestjs/common';
+import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { SubscriptionService } from './subscription.service';
+
+/**
+ * Subscription Controller
+ * Handles subscription status and management
+ */
+@Controller('api/v2/subscription')
+@UseGuards(JwtAuthGuard)
+export class SubscriptionController {
+    private readonly logger = new Logger(SubscriptionController.name);
+
+    constructor(private readonly subscriptionService: SubscriptionService) { }
+
+    /**
+     * GET /api/v2/subscription/status
+     * Get current subscription status for the authenticated user
+     */
+    @Get('status')
+    @HttpCode(HttpStatus.OK)
+    async getStatus(@Req() req: AuthenticatedRequest) {
+        const userId = req.user?.sub || req.user?.id;
+        this.logger.log(`Subscription status request - User: ${userId}`);
+        return this.subscriptionService.getSubscriptionStatus(userId);
+    }
+}

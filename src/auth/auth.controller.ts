@@ -163,4 +163,27 @@ export class AuthController {
             updatePasswordDto.newPassword,
         );
     }
+
+    // ============================================
+    // EMAIL VERIFICATION (API v2)
+    // ============================================
+
+    /**
+     * POST /api/v2/auth/resend-verification
+     * Resend email verification
+     */
+    @HttpCode(HttpStatus.OK)
+    @Post('resend-verification')
+    async resendVerification(@Body('email') email: string) {
+        return this.authService.resendVerificationEmail(email);
+    }
+
+    /**
+     * GET /api/v2/auth/verify-email
+     * Verify email token and redirect to frontend
+     */
+    @Get('verify-email')
+    async verifyEmail(@Query('token') token: string, @Res() res: Response) {
+        return this.authService.verifyEmail(token, res);
+    }
 }
