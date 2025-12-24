@@ -17,6 +17,7 @@ Setiap file phase berisi:
 |-------|-------|---------|-----------------|
 | [Phase 1](./phase-1.md) | AI Core Unification & Auth Refactoring | 23 Des 2024 | ❌ Tidak ada |
 | [Phase 2](./phase-2.md) | Security, Performance & DX | 24 Des 2024 | ⚠️ Optional handling untuk rate limit 429 |
+| [Phase 3](./phase-3.md) | Performance & Reliability | 24 Des 2024 | ⚠️ Optional handling untuk timeout 408 |
 
 ---
 

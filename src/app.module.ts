@@ -21,11 +21,13 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
 import { ShareModule } from './share/share.module';
 import { PromptsModule } from './prompts/prompts.module';
 import { HealthModule } from './health/health.module';
+import { envValidationSchema } from './config/env.validation';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      validationSchema: envValidationSchema,
     }),
     // Rate limiting: 60 requests per minute globally
     ThrottlerModule.forRoot([{

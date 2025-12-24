@@ -4,9 +4,11 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { join } from 'path';
 import { json, urlencoded } from 'express';
+import compression from 'compression';
 import { AppModule } from './app.module';
 import { bootstrapProduction } from './bootstrap';
 import { AiExceptionFilter } from './ai-core/filters/ai-exception.filter';
+import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -19,6 +21,9 @@ async function bootstrap() {
       ? ['error', 'warn', 'log']
       : ['error', 'warn', 'log', 'debug', 'verbose'],
   });
+
+  // Enable Gzip compression for responses
+  app.use(compression());
 
   // Increase body parser limit for large image uploads (base64 encoded images can be large)
   app.use(json({ limit: '50mb' }));
@@ -64,6 +69,9 @@ async function bootstrap() {
 
   // Apply global AI exception filter
   app.useGlobalFilters(new AiExceptionFilter());
+
+  // Apply global timeout interceptor (30s default, 120s for AI generation)
+  app.useGlobalInterceptors(new TimeoutInterceptor());
 
   // Swagger API Documentation
   const config = new DocumentBuilder()
