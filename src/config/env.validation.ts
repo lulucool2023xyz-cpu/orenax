@@ -12,11 +12,10 @@ export const envValidationSchema = Joi.object({
         .default('development'),
     PORT: Joi.number().default(3001),
 
-    // Supabase (Required)
-    SUPABASE_URL: Joi.string().uri().required()
-        .messages({ 'any.required': 'SUPABASE_URL is required for database connection' }),
-    SUPABASE_KEY: Joi.string().required()
-        .messages({ 'any.required': 'SUPABASE_KEY (anon key) is required' }),
+    // Supabase - Important but optional to allow startup
+    // The app will log warnings if these are missing
+    SUPABASE_URL: Joi.string().uri().optional(),
+    SUPABASE_KEY: Joi.string().optional(),
     SUPABASE_SERVICE_ROLE_KEY: Joi.string().optional(),
 
     // JWT

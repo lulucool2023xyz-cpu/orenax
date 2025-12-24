@@ -4,6 +4,7 @@ import { AiConfigService } from './config/ai-config.service';
 import { AiStrategyFactory } from './services/ai-strategy.factory';
 import { AiDtoMapperService } from './services/ai-dto-mapper.service';
 import { AiGenerationService } from './services/ai-generation.service';
+import { AiWarmupService } from './services/ai-warmup.service';
 
 /**
  * AI Provider Module
@@ -18,6 +19,7 @@ import { AiGenerationService } from './services/ai-generation.service';
         AiStrategyFactory,
         AiDtoMapperService,
         AiGenerationService,
+        AiWarmupService,  // Initializes AI clients on bootstrap
     ],
     exports: [
         AiConfigService,
