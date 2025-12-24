@@ -284,4 +284,232 @@ export class PaymentService {
             throw new BadRequestException('Gagal memverifikasi pembayaran');
         }
     }
+
+    /**
+     * Handle Midtrans webhook notification
+     * Called by Midtrans server-to-server
+     */
+    async handleWebhook(notification: MidtransNotification, signature: string): Promise<{ success: boolean }> {
+        // Verify signature
+        const isValid = await this.verifyWebhookSignature(notification, signature);
+        if (!isValid) {
+            this.logger.warn(`Invalid webhook signature for order ${notification.order_id}`);
+            throw new BadRequestException('Invalid signature');
+        }
+
+        const orderId = notification.order_id;
+        const transactionStatus = notification.transaction_status;
+        const fraudStatus = notification.fraud_status;
+
+        this.logger.log(`Webhook received: ${orderId} - ${transactionStatus}`);
+
+        // Get order details
+        const { data: order } = await this.supabaseService.getAdminClient()
+            .from('payment_orders')
+            .select('*')
+            .eq('order_id', orderId)
+            .single();
+
+        if (!order) {
+            this.logger.warn(`Order not found for webhook: ${orderId}`);
+            return { success: false };
+        }
+
+        // Handle different transaction statuses
+        let paymentStatus = 'pending';
+        let shouldActivate = false;
+
+        if (transactionStatus === 'capture' || transactionStatus === 'settlement') {
+            if (fraudStatus === 'accept' || !fraudStatus) {
+                paymentStatus = 'paid';
+                shouldActivate = true;
+            }
+        } else if (transactionStatus === 'deny' || transactionStatus === 'cancel' || transactionStatus === 'expire') {
+            paymentStatus = 'failed';
+        } else if (transactionStatus === 'pending') {
+            paymentStatus = 'pending';
+        }
+
+        // Update order status
+        await this.supabaseService.getAdminClient()
+            .from('payment_orders')
+            .update({
+                status: paymentStatus,
+                midtrans_transaction_id: notification.transaction_id,
+                paid_at: shouldActivate ? new Date().toISOString() : null,
+            })
+            .eq('order_id', orderId);
+
+        // Activate subscription if payment successful
+        if (shouldActivate) {
+            await this.activateSubscription(order.user_id, order.plan_id, order.billing_cycle, notification.transaction_id);
+
+            // Record payment history
+            await this.recordPaymentHistory({
+                userId: order.user_id,
+                orderId,
+                amount: parseInt(notification.gross_amount),
+                paymentMethod: notification.payment_type,
+                status: 'success',
+            });
+        }
+
+        return { success: true };
+    }
+
+    /**
+     * Verify Midtrans webhook signature
+     */
+    private async verifyWebhookSignature(notification: MidtransNotification, signature: string): Promise<boolean> {
+        if (!this.serverKey) {
+            // Skip verification in mock mode
+            return true;
+        }
+
+        const crypto = await import('crypto');
+        const signatureKey = notification.order_id + notification.status_code + notification.gross_amount + this.serverKey;
+        const expectedSignature = crypto.createHash('sha512').update(signatureKey).digest('hex');
+
+        return signature === expectedSignature;
+    }
+
+    /**
+     * Activate subscription for user
+     */
+    private async activateSubscription(
+        userId: string,
+        planId: string,
+        billingCycle: string,
+        transactionId: string,
+    ): Promise<void> {
+        const now = new Date();
+        const endDate = new Date(now);
+
+        if (billingCycle === 'monthly') {
+            endDate.setMonth(endDate.getMonth() + 1);
+        } else {
+            endDate.setFullYear(endDate.getFullYear() + 1);
+        }
+
+        await this.supabaseService.getAdminClient()
+            .from('subscriptions')
+            .upsert({
+                user_id: userId,
+                plan: planId,
+                status: 'active',
+                current_period_start: now.toISOString(),
+                current_period_end: endDate.toISOString(),
+                cancel_at_period_end: false,
+                midtrans_subscription_id: transactionId,
+                updated_at: now.toISOString(),
+            }, { onConflict: 'user_id' });
+
+        this.logger.log(`Subscription activated for user ${userId}, plan: ${planId}, expires: ${endDate.toISOString()}`);
+    }
+
+    /**
+     * Record payment in history
+     */
+    private async recordPaymentHistory(params: {
+        userId: string;
+        orderId: string;
+        amount: number;
+        paymentMethod: string;
+        status: string;
+        invoiceUrl?: string;
+    }): Promise<void> {
+        await this.supabaseService.getAdminClient()
+            .from('payment_history')
+            .insert({
+                user_id: params.userId,
+                order_id: params.orderId,
+                amount: params.amount,
+                payment_method: params.paymentMethod,
+                status: params.status,
+                invoice_url: params.invoiceUrl || null,
+            });
+    }
+
+    /**
+     * Cancel subscription
+     * Subscription remains active until end of current period
+     */
+    async cancelSubscription(userId: string): Promise<CancelSubscriptionResponse> {
+        const subscription = await this.getActiveSubscription(userId);
+
+        if (!subscription) {
+            throw new BadRequestException({
+                error: true,
+                code: 'NO_ACTIVE_SUBSCRIPTION',
+                message: 'Tidak ada subscription aktif',
+            });
+        }
+
+        // Mark for cancellation at period end
+        await this.supabaseService.getAdminClient()
+            .from('subscriptions')
+            .update({
+                cancel_at_period_end: true,
+                updated_at: new Date().toISOString(),
+            })
+            .eq('user_id', userId);
+
+        this.logger.log(`Subscription cancelled for user ${userId}, ends at ${subscription.current_period_end}`);
+
+        return {
+            success: true,
+            message: 'Subscription akan berakhir pada akhir periode',
+            endsAt: subscription.current_period_end,
+        };
+    }
+
+    /**
+     * Get payment history for user
+     */
+    async getPaymentHistory(userId: string, limit: number = 10): Promise<PaymentHistoryItem[]> {
+        const { data } = await this.supabaseService.getAdminClient()
+            .from('payment_history')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        return (data || []).map(item => ({
+            id: item.id,
+            orderId: item.order_id,
+            amount: item.amount,
+            paymentMethod: item.payment_method,
+            status: item.status,
+            invoiceUrl: item.invoice_url,
+            createdAt: item.created_at,
+        }));
+    }
 }
+
+// Additional interfaces
+export interface MidtransNotification {
+    transaction_status: 'capture' | 'settlement' | 'pending' | 'deny' | 'cancel' | 'expire';
+    order_id: string;
+    gross_amount: string;
+    status_code: string;
+    payment_type: string;
+    transaction_id: string;
+    fraud_status?: string;
+}
+
+export interface CancelSubscriptionResponse {
+    success: boolean;
+    message: string;
+    endsAt: string;
+}
+
+export interface PaymentHistoryItem {
+    id: string;
+    orderId: string;
+    amount: number;
+    paymentMethod: string;
+    status: string;
+    invoiceUrl: string | null;
+    createdAt: string;
+}
+

@@ -37,6 +37,9 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/platform-socket.io": "^11.1.9",
     "@nestjs/serve-static": "^5.0.4",
+    "@nestjs/swagger": "^11.2.3",
+    "@nestjs/terminus": "^11.0.0",
+    "@nestjs/throttler": "^6.5.0",
     "@nestjs/websockets": "^11.1.9",
     "@supabase/supabase-js": "^2.86.0",
     "@types/uuid": "^9.0.8",
@@ -52,6 +55,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.1",
+    "swagger-ui-express": "^5.0.1",
     "uuid": "^9.0.1",
     "ws": "^8.18.3"
   },

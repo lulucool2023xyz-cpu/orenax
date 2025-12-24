@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { join } from 'path';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
@@ -64,6 +65,16 @@ async function bootstrap() {
   // Apply global AI exception filter
   app.useGlobalFilters(new AiExceptionFilter());
 
+  // Swagger API Documentation
+  const config = new DocumentBuilder()
+    .setTitle('OrenaX Backend API')
+    .setDescription('AI-powered backend with Gemini, Vertex AI, Image/Video/Music generation')
+    .setVersion('2.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+
   // Use PORT from environment (Railway provides this)
   const port = process.env.PORT || 3001;
 
@@ -71,8 +82,8 @@ async function bootstrap() {
 
   logger.log(`🚀 OrenaX Backend is running on port ${port}`);
   logger.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  logger.log(`🔗 Health check: http://localhost:${port}/api/v2/health`);
-  logger.log(`🔗 API Portal: http://localhost:${port}`);
+  logger.log(`📚 Swagger Docs: http://localhost:${port}/api/docs`);
+  logger.log(`🔗 Health check: http://localhost:${port}/health/live`);
 }
 
 bootstrap();

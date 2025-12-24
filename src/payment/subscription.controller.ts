@@ -1,6 +1,7 @@
 import {
     Controller,
     Get,
+    Post,
     HttpCode,
     HttpStatus,
     UseGuards,
@@ -10,6 +11,7 @@ import {
 import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SubscriptionService } from './subscription.service';
+import { PaymentService } from './payment.service';
 
 /**
  * Subscription Controller
@@ -20,7 +22,10 @@ import { SubscriptionService } from './subscription.service';
 export class SubscriptionController {
     private readonly logger = new Logger(SubscriptionController.name);
 
-    constructor(private readonly subscriptionService: SubscriptionService) { }
+    constructor(
+        private readonly subscriptionService: SubscriptionService,
+        private readonly paymentService: PaymentService,
+    ) { }
 
     /**
      * GET /api/v2/subscription/status
@@ -32,5 +37,17 @@ export class SubscriptionController {
         const userId = req.user?.sub || req.user?.id;
         this.logger.log(`Subscription status request - User: ${userId}`);
         return this.subscriptionService.getSubscriptionStatus(userId);
+    }
+
+    /**
+     * POST /api/v2/subscription/cancel
+     * Cancel subscription (will end at period end)
+     */
+    @Post('cancel')
+    @HttpCode(HttpStatus.OK)
+    async cancelSubscription(@Req() req: AuthenticatedRequest) {
+        const userId = req.user?.sub || req.user?.id;
+        this.logger.log(`Cancel subscription request - User: ${userId}`);
+        return this.paymentService.cancelSubscription(userId);
     }
 }

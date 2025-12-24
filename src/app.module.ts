@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -19,12 +20,18 @@ import { MediaModule } from './media/media.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { ShareModule } from './share/share.module';
 import { PromptsModule } from './prompts/prompts.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    // Rate limiting: 60 requests per minute globally
+    ThrottlerModule.forRoot([{
+      ttl: 60000,  // 1 minute
+      limit: 60,   // 60 requests per minute
+    }]),
     SupabaseModule,
     VertexAiModule,
     AiProviderModule,
@@ -42,6 +49,7 @@ import { PromptsModule } from './prompts/prompts.module';
     ApiKeysModule,    // User API Keys
     ShareModule,      // Chat Sharing
     PromptsModule,    // Prompt Marketplace
+    HealthModule,     // Health Checks
   ],
   controllers: [AppController],
   providers: [AppService],
