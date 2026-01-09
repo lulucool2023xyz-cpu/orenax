@@ -47,9 +47,15 @@ async function bootstrap() {
     ];
 
   app.enableCors({
-    origin: process.env.NODE_ENV === 'production'
-      ? allowedOrigins
-      : true, // Allow all origins in development
+    origin: (origin, callback) => {
+      // Allow non-browser requests (e.g., curl, server-to-server) with no origin
+      if (!origin) return callback(null, true);
+
+      // Allow explicit allowed origins or any subdomain of up.railway.app
+      const isAllowed = allowedOrigins.includes(origin) || /\.up\.railway\.app$/.test(origin);
+      if (isAllowed) return callback(null, true);
+      return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
