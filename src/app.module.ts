@@ -23,6 +23,11 @@ import { ShareModule } from './share/share.module';
 import { PromptsModule } from './prompts/prompts.module';
 import { HealthModule } from './health/health.module';
 import { envValidationSchema } from './config/env.validation';
+// OpenRouter Multi-Model AI
+import { OpenRouterModule } from './openrouter/openrouter.module';
+// Queue & Analytics
+import { QueueModule } from './queue/queue.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -53,6 +58,11 @@ import { envValidationSchema } from './config/env.validation';
     ShareModule,      // Chat Sharing
     PromptsModule,    // Prompt Marketplace
     HealthModule,     // Health Checks
+    // Multi-Model AI via OpenRouter
+    OpenRouterModule, // Access 500+ AI models
+    // Background Jobs & Analytics
+    QueueModule,      // BullMQ job queue
+    AnalyticsModule,  // Usage tracking
   ],
   controllers: [AppController],
   providers: [AppService],

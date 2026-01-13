@@ -41,8 +41,8 @@ async function bootstrap() {
       'http://localhost:8080',
       'https://orenax.vercel.app',
       'https://orenax.netlify.app',
-      'https://artificial-production-19f5.up.railway.app',
-      'https://orenax-production-0c1a.up.railway.app',
+      'https://artificial-production.up.railway.app',
+      'https://orenax-production.up.railway.app',
       'http://localhost:59873',
     ];
 
