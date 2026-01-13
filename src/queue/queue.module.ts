@@ -18,10 +18,9 @@ import { JobStatusService } from './job-status.service';
 import { QueueController } from './queue.controller';
 
 // Queue names
-export const QUEUE_NAMES = {
-    AI_GENERATION: 'ai-generation',
-    MEDIA_PROCESSING: 'media-processing',
-} as const;
+import { QUEUE_NAMES } from './queue.constants';
+
+export { QUEUE_NAMES };
 
 @Module({
     imports: [

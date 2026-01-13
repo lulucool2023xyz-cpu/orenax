@@ -6,7 +6,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue, Job } from 'bullmq';
-import { QUEUE_NAMES } from './queue.module';
+import { QUEUE_NAMES } from './queue.constants';
 
 // Job data types
 export interface AiGenerationJobData {
