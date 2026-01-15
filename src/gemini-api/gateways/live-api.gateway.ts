@@ -368,42 +368,47 @@ export class LiveApiGateway implements OnGatewayConnection, OnGatewayDisconnect 
             const input = payload.realtimeInput || payload;
 
             // Build message per BidiGenerateContentRealtimeInput spec
-            // Uses mediaChunks array for audio/video data
+            // Per official docs: mediaChunks is DEPRECATED, use audio/video/text directly
             const message: any = { realtimeInput: {} };
 
-            // Audio input - using mediaChunks format (correct per Gemini API spec)
+            // Audio input - Blob format: { data: base64, mimeType: "audio/pcm;rate=16000" }
             if (input.audio) {
-                message.realtimeInput.mediaChunks = [{
-                    mimeType: input.audio.mimeType || 'audio/pcm;rate=16000',
+                message.realtimeInput.audio = {
                     data: input.audio.data,
-                }];
+                    mimeType: input.audio.mimeType || 'audio/pcm;rate=16000',
+                };
+                this.logger.debug(`Sending audio chunk (${input.audio.data.length} chars base64)`);
             }
 
-            // Video input - using mediaChunks format
+            // Video input - Blob format: { data: base64, mimeType: "image/jpeg" }
             if (input.video) {
-                message.realtimeInput.mediaChunks = message.realtimeInput.mediaChunks || [];
-                message.realtimeInput.mediaChunks.push({
-                    mimeType: input.video.mimeType || 'image/jpeg',
+                message.realtimeInput.video = {
                     data: input.video.data,
-                });
+                    mimeType: input.video.mimeType || 'image/jpeg',
+                };
+                this.logger.debug(`Sending video frame`);
             }
 
-            // Text input - direct format
+            // Text input - direct string
             if (input.text) {
                 message.realtimeInput.text = input.text;
+                this.logger.debug(`Sending text: ${input.text.substring(0, 50)}...`);
             }
 
             // Activity signals (when manual VAD)
             if (input.activityStart) {
                 message.realtimeInput.activityStart = {};
+                this.logger.debug(`Sending activityStart`);
             }
             if (input.activityEnd) {
                 message.realtimeInput.activityEnd = {};
+                this.logger.debug(`Sending activityEnd`);
             }
 
             // Audio stream end (when mic paused)
             if (input.audioStreamEnd) {
                 message.realtimeInput.audioStreamEnd = true;
+                this.logger.debug(`Sending audioStreamEnd`);
             }
 
             session.geminiWs.send(JSON.stringify(message));
