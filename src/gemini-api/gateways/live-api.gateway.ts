@@ -7,38 +7,13 @@ import {
     MessageBody,
     ConnectedSocket,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import WebSocket from 'ws';
-
-/**
- * Gemini Live API Gateway
- * Implements real-time bidirectional audio/video/text communication
- * 
- * IMPORTANT: This follows the exact Gemini Live API WebSocket spec:
- * - Endpoint: wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent
- * - Audio Input: 16-bit PCM, 16kHz, mono (audio/pcm;rate=16000)
- * - Audio Output: 16-bit PCM, 24kHz, mono
- * 
- * Flow:
- * 1. Client connects to this gateway via Socket.io
- * 2. Client sends 'setup' message with config
- * 3. Gateway connects to Gemini WebSocket and sends setup
- * 4. Gateway forwards messages bidirectionally
- */
-
-interface SessionState {
-    geminiWs: WebSocket | null;
-    isSetupComplete: boolean;
-    model: string;
-    sessionHandle?: string;
-}
+import { Server, WebSocket } from 'ws';
+import { LiveApiService } from '../services/live-api.service';
 
 @WebSocketGateway({
-    namespace: '/live',
     cors: {
-        origin: '*',
+        origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
         credentials: true,
     },
 })
@@ -47,519 +22,222 @@ export class LiveApiGateway implements OnGatewayConnection, OnGatewayDisconnect 
     server: Server;
 
     private readonly logger = new Logger(LiveApiGateway.name);
-    private sessions: Map<string, SessionState> = new Map();
-    private readonly geminiApiKey: string;
+    private readonly clients: Map<WebSocket, string> = new Map();
+    private clientCounter = 0;
 
-    // Gemini Live API WebSocket URL (v1beta)
-    private readonly GEMINI_WS_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
+    constructor(private readonly liveApiService: LiveApiService) { }
 
-    constructor(private readonly configService: ConfigService) {
-        this.geminiApiKey = this.configService.get<string>('GEMINI_API_KEY') || '';
+    handleConnection(client: WebSocket) {
+        const clientId = `client_${++this.clientCounter}_${Date.now()}`;
+        this.clients.set(client, clientId);
+        this.logger.log(`Client connected: ${clientId}`);
 
-        if (!this.geminiApiKey) {
-            this.logger.error('❌ GEMINI_API_KEY not configured - Live API will not work!');
-        } else {
-            this.logger.log('✅ Live API Gateway initialized');
-            this.logger.log(`   API Key: ${this.geminiApiKey.substring(0, 10)}...`);
-        }
-    }
-
-    /**
-     * Handle new client connection
-     */
-    handleConnection(client: Socket) {
-        this.logger.log(`📱 Client connected: ${client.id}`);
-
-        // Initialize session state
-        this.sessions.set(client.id, {
-            geminiWs: null,
-            isSetupComplete: false,
-            model: 'gemini-2.5-flash-native-audio-preview-12-2025',
-        });
-
-        // Send connection acknowledgment
-        client.emit('connected', {
-            message: 'Connected to Live API Gateway',
-            sessionId: client.id,
-            timestamp: new Date().toISOString(),
+        this.sendToClient(client, {
+            type: 'connected',
+            data: { clientId },
         });
     }
 
-    /**
-     * Handle client disconnect - clean up resources
-     */
-    handleDisconnect(client: Socket) {
-        this.logger.log(`📴 Client disconnected: ${client.id}`);
-
-        const session = this.sessions.get(client.id);
-        if (session?.geminiWs) {
-            try {
-                session.geminiWs.close();
-            } catch (e) {
-                // Ignore close errors
-            }
+    async handleDisconnect(client: WebSocket) {
+        const clientId = this.clients.get(client);
+        if (clientId) {
+            this.logger.log(`Client disconnected: ${clientId}`);
+            await this.liveApiService.closeSession(clientId);
+            this.clients.delete(client);
         }
-        this.sessions.delete(client.id);
     }
 
-    /**
-     * Setup Live API session
-     * 
-     * Client sends: { setup: { model, generationConfig, systemInstruction, ... } }
-     * 
-     * Per Gemini docs, the setup message MUST be sent first after WebSocket opens
-     */
-    @SubscribeMessage('setup')
-    async handleSetup(
-        @ConnectedSocket() client: Socket,
-        @MessageBody() payload: { setup: any },
+    @SubscribeMessage('start-session')
+    async handleStartSession(
+        @ConnectedSocket() client: WebSocket,
+        @MessageBody() data: { systemInstruction?: string } // Receive data
     ) {
-        const config = payload.setup || payload;
-        const session = this.sessions.get(client.id);
-
-        if (!session) {
-            this.logger.error(`No session found for client ${client.id}`);
-            client.emit('error', { code: 'SESSION_NOT_FOUND', message: 'Session not found' });
+        const clientId = this.clients.get(client);
+        if (!clientId) {
+            this.sendError(client, 'Client not registered');
             return;
         }
 
-        if (!this.geminiApiKey) {
-            client.emit('error', { code: 'API_KEY_MISSING', message: 'Gemini API key not configured' });
+        this.logger.log(`Starting session for ${clientId}...`);
+
+        try {
+            await this.liveApiService.createSession(
+                clientId,
+                data?.systemInstruction, // Pass it
+                // onMessage - handle all Live API messages
+                (message: any) => this.handleLiveApiMessage(client, clientId, message),
+                // onError
+                (error: Error) => this.sendError(client, error.message),
+                // onClose
+                () => {
+                    this.sendToClient(client, { type: 'session-closed', data: {} });
+                },
+            );
+
+            this.sendToClient(client, {
+                type: 'session-started',
+                data: { clientId },
+            });
+
+            this.logger.log(`Session started for ${clientId}`);
+        } catch (error) {
+            this.logger.error(`Failed to start session for ${clientId}:`, error);
+            this.sendError(client, 'Failed to start Live API session');
+        }
+    }
+
+    @SubscribeMessage('send-audio')
+    async handleSendAudio(
+        @ConnectedSocket() client: WebSocket,
+        @MessageBody() data: { audio: string; mimeType?: string },
+    ) {
+        const clientId = this.clients.get(client);
+        if (!clientId || !this.liveApiService.hasSession(clientId)) {
             return;
         }
 
         try {
-            // Close existing Gemini connection if any
-            if (session.geminiWs) {
-                session.geminiWs.close();
-                session.geminiWs = null;
-            }
+            await this.liveApiService.sendAudio(
+                clientId,
+                data.audio,
+                data.mimeType || 'audio/pcm;rate=16000',
+            );
+        } catch (error) {
+            this.logger.error(`Error sending audio: ${error.message}`);
+        }
+    }
 
-            const modelName = config.model || 'gemini-2.5-flash-native-audio-preview-12-2025';
-            this.logger.log(`🚀 Setting up Live API for client ${client.id}`);
-            this.logger.log(`   Model: ${modelName}`);
+    @SubscribeMessage('send-video')
+    async handleSendVideo(
+        @ConnectedSocket() client: WebSocket,
+        @MessageBody() data: { video: string; mimeType?: string },
+    ) {
+        const clientId = this.clients.get(client);
+        if (!clientId || !this.liveApiService.hasSession(clientId)) {
+            return;
+        }
 
-            // Connect to Gemini WebSocket
-            const wsUrl = `${this.GEMINI_WS_URL}?key=${this.geminiApiKey}`;
-            this.logger.log(`   Connecting to Gemini WebSocket...`);
+        try {
+            await this.liveApiService.sendVideo(
+                clientId,
+                data.video,
+                data.mimeType || 'image/jpeg',
+            );
+        } catch (error) {
+            this.logger.error(`Error sending video: ${error.message}`);
+        }
+    }
 
-            const geminiWs = new WebSocket(wsUrl);
+    @SubscribeMessage('send-text')
+    async handleSendText(
+        @ConnectedSocket() client: WebSocket,
+        @MessageBody() data: { text: string },
+    ) {
+        const clientId = this.clients.get(client);
+        if (!clientId || !this.liveApiService.hasSession(clientId)) {
+            return;
+        }
 
-            // Handle Gemini WebSocket open
-            geminiWs.on('open', () => {
-                this.logger.log(`✅ Gemini WebSocket opened for client ${client.id}`);
+        try {
+            await this.liveApiService.sendText(clientId, data.text);
+        } catch (error) {
+            this.logger.error(`Error sending text: ${error.message}`);
+        }
+    }
 
-                // Build setup message per Gemini BidiGenerateContentSetup spec
-                const setupMessage = {
-                    setup: {
-                        // Model must be in format "models/{model}"
-                        model: modelName.startsWith('models/') ? modelName : `models/${modelName}`,
+    @SubscribeMessage('end-session')
+    async handleEndSession(@ConnectedSocket() client: WebSocket) {
+        const clientId = this.clients.get(client);
+        if (!clientId) return;
 
-                        // Generation config
-                        generationConfig: {
-                            // Response modality - AUDIO for voice responses
-                            responseModalities: config.generationConfig?.responseModalities || ['AUDIO'],
+        await this.liveApiService.closeSession(clientId);
+        this.sendToClient(client, {
+            type: 'session-ended',
+            data: { clientId },
+        });
+    }
 
-                            // Voice config for audio output
-                            speechConfig: config.generationConfig?.speechConfig || {
-                                voiceConfig: {
-                                    prebuiltVoiceConfig: {
-                                        voiceName: config.voice || 'Kore'
-                                    },
-                                },
+    private handleLiveApiMessage(client: WebSocket, clientId: string, message: any) {
+        // Handle setupComplete
+        if (message.setupComplete) {
+            this.logger.log(`[${clientId}] Setup complete`);
+            this.sendToClient(client, { type: 'setup-complete', data: {} });
+            return;
+        }
+
+        // Handle serverContent
+        if (message.serverContent) {
+            const sc = message.serverContent;
+
+            // Audio response from model
+            if (sc.modelTurn?.parts) {
+                for (const part of sc.modelTurn.parts) {
+                    if (part.inlineData?.data) {
+                        this.logger.log(`[${clientId}] Sending audio chunk, size: ${part.inlineData.data.length}`);
+                        this.sendToClient(client, {
+                            type: 'audio-response',
+                            data: {
+                                audio: part.inlineData.data,
+                                mimeType: part.inlineData.mimeType || 'audio/pcm;rate=24000',
                             },
-
-                            // Generation parameters
-                            temperature: config.generationConfig?.temperature ?? 0.7,
-                            maxOutputTokens: config.generationConfig?.maxOutputTokens ?? 4096,
-                        },
-
-                        // System instruction (optional)
-                        ...(config.systemInstruction && {
-                            systemInstruction: typeof config.systemInstruction === 'string'
-                                ? { parts: [{ text: config.systemInstruction }] }
-                                : config.systemInstruction,
-                        }),
-
-                        // Audio transcription - enabled by default
-                        inputAudioTranscription: config.inputAudioTranscription ?? {},
-                        outputAudioTranscription: config.outputAudioTranscription ?? {},
-
-                        // Realtime input config (VAD settings)
-                        realtimeInputConfig: config.realtimeInputConfig ?? {
-                            automaticActivityDetection: {
-                                disabled: false,
-                                startOfSpeechSensitivity: 'START_SENSITIVITY_HIGH',
-                                endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH',
-                            },
-                        },
-
-                        // Tools (function calling, google search)
-                        ...(config.tools && { tools: config.tools }),
-
-                        // Thinking config for native audio models
-                        ...(config.thinkingConfig && { thinkingConfig: config.thinkingConfig }),
-
-                        // Session resumption
-                        ...(config.sessionResumption && { sessionResumption: config.sessionResumption }),
-
-                        // Context window compression
-                        ...(config.contextWindowCompression && {
-                            contextWindowCompression: config.contextWindowCompression
-                        }),
-                    },
-                };
-
-                this.logger.log(`   Sending setup message to Gemini...`);
-                this.logger.debug(`   Setup: ${JSON.stringify(setupMessage, null, 2)}`);
-
-                geminiWs.send(JSON.stringify(setupMessage));
-            });
-
-            // Handle messages from Gemini
-            geminiWs.on('message', (data: WebSocket.Data) => {
-                try {
-                    const message = JSON.parse(data.toString());
-
-                    // Log received message type
-                    const msgType = Object.keys(message).filter(k => k !== 'usageMetadata')[0] || 'unknown';
-                    this.logger.debug(`📨 Gemini message: ${msgType}`);
-
-                    // Handle setupComplete
-                    if (message.setupComplete !== undefined) {
-                        session.isSetupComplete = true;
-                        this.logger.log(`✅ Setup complete for client ${client.id}`);
-                        client.emit('setupComplete', {});
-                    }
-
-                    // Handle serverContent (audio/text responses)
-                    if (message.serverContent) {
-                        const sc = message.serverContent;
-
-                        // Forward full serverContent to client
-                        client.emit('serverContent', {
-                            modelTurn: sc.modelTurn,
-                            turnComplete: sc.turnComplete,
-                            interrupted: sc.interrupted,
-                            generationComplete: sc.generationComplete,
-                            groundingMetadata: sc.groundingMetadata,
-                        });
-
-                        // Also emit specific transcription events
-                        if (sc.inputTranscription?.text) {
-                            client.emit('inputTranscription', { text: sc.inputTranscription.text });
-                        }
-                        if (sc.outputTranscription?.text) {
-                            client.emit('outputTranscription', { text: sc.outputTranscription.text });
-                        }
-                        if (sc.interrupted) {
-                            client.emit('interrupted', {});
-                        }
-                        if (sc.turnComplete) {
-                            client.emit('turnComplete', {});
-                        }
-                        if (sc.generationComplete) {
-                            client.emit('generationComplete', {});
-                        }
-                    }
-
-                    // Handle toolCall
-                    if (message.toolCall) {
-                        this.logger.log(`🔧 Tool call for client ${client.id}`);
-                        client.emit('toolCall', message.toolCall);
-                    }
-
-                    // Handle toolCallCancellation
-                    if (message.toolCallCancellation) {
-                        client.emit('toolCallCancellation', message.toolCallCancellation);
-                    }
-
-                    // Handle goAway (session ending soon)
-                    if (message.goAway) {
-                        this.logger.warn(`⚠️ GoAway for client ${client.id}: ${message.goAway.timeLeft}`);
-                        client.emit('goAway', { timeLeft: message.goAway.timeLeft });
-                    }
-
-                    // Handle sessionResumptionUpdate
-                    if (message.sessionResumptionUpdate) {
-                        session.sessionHandle = message.sessionResumptionUpdate.newHandle;
-                        client.emit('sessionResumptionUpdate', {
-                            newHandle: message.sessionResumptionUpdate.newHandle,
-                            resumable: message.sessionResumptionUpdate.resumable,
                         });
                     }
-
-                    // Handle usageMetadata
-                    if (message.usageMetadata) {
-                        client.emit('usageMetadata', message.usageMetadata);
+                    if (part.text) {
+                        this.sendToClient(client, {
+                            type: 'text-response',
+                            data: { text: part.text },
+                        });
                     }
-
-                } catch (parseError) {
-                    this.logger.error(`Failed to parse Gemini message: ${parseError}`);
                 }
-            });
+            }
 
-            // Handle Gemini WebSocket close
-            geminiWs.on('close', (code, reason) => {
-                this.logger.log(`🔌 Gemini WebSocket closed for ${client.id}: ${code} - ${reason}`);
-                session.isSetupComplete = false;
-                session.geminiWs = null;
-                client.emit('sessionClosed', { code, reason: reason?.toString() || 'Connection closed' });
-            });
-
-            // Handle Gemini WebSocket error
-            geminiWs.on('error', (error) => {
-                this.logger.error(`❌ Gemini WebSocket error for ${client.id}: ${error.message}`);
-                client.emit('error', {
-                    code: 'GEMINI_WS_ERROR',
-                    message: error.message,
+            // Input transcription (what user said)
+            if (sc.inputTranscription?.text) {
+                this.logger.log(`[${clientId}] User said: "${sc.inputTranscription.text}"`);
+                this.sendToClient(client, {
+                    type: 'input-transcription',
+                    data: { text: sc.inputTranscription.text },
                 });
-            });
+            }
 
-            // Store WebSocket in session
-            session.geminiWs = geminiWs;
-            session.model = modelName;
+            // Output transcription (what AI said)
+            if (sc.outputTranscription?.text) {
+                this.logger.log(`[${clientId}] AI said: "${sc.outputTranscription.text}"`);
+                this.sendToClient(client, {
+                    type: 'output-transcription',
+                    data: { text: sc.outputTranscription.text },
+                });
+            }
 
-        } catch (error) {
-            this.logger.error(`Setup failed for ${client.id}: ${error}`);
-            client.emit('error', {
-                code: 'SETUP_FAILED',
-                message: error.message || 'Setup failed',
+            // Turn complete
+            if (sc.turnComplete) {
+                this.logger.log(`[${clientId}] Turn complete`);
+                this.sendToClient(client, { type: 'turn-complete', data: {} });
+            }
+
+            // Interrupted
+            if (sc.interrupted) {
+                this.logger.log(`[${clientId}] Interrupted`);
+                this.sendToClient(client, { type: 'interrupted', data: {} });
+            }
+        }
+
+        // Usage metadata
+        if (message.usageMetadata) {
+            this.sendToClient(client, {
+                type: 'usage-metadata',
+                data: message.usageMetadata,
             });
         }
     }
 
-    /**
-     * Handle realtime input (audio, video, text)
-     * 
-     * BidiGenerateContentRealtimeInput format:
-     * - audio: { data: base64, mimeType: "audio/pcm;rate=16000" }
-     * - video: { data: base64, mimeType: "image/jpeg" }
-     * - text: string
-     * - activityStart: {} (when VAD disabled)
-     * - activityEnd: {} (when VAD disabled)
-     * - audioStreamEnd: true (when mic paused)
-     */
-    @SubscribeMessage('realtimeInput')
-    handleRealtimeInput(
-        @ConnectedSocket() client: Socket,
-        @MessageBody() payload: any,
-    ) {
-        const session = this.sessions.get(client.id);
-
-        if (!session?.geminiWs || session.geminiWs.readyState !== WebSocket.OPEN) {
-            client.emit('error', {
-                code: 'NOT_CONNECTED',
-                message: 'Not connected to Gemini',
-            });
-            return;
-        }
-
-        if (!session.isSetupComplete) {
-            client.emit('error', {
-                code: 'SETUP_NOT_COMPLETE',
-                message: 'Setup not complete. Wait for setupComplete event.',
-            });
-            return;
-        }
-
-        try {
-            // Extract input data - handle both wrapped and direct formats
-            const input = payload.realtimeInput || payload;
-
-            // Build message per BidiGenerateContentRealtimeInput spec
-            // Per official docs: mediaChunks is DEPRECATED, use audio/video/text directly
-            const message: any = { realtimeInput: {} };
-
-            // Audio input - Blob format: { data: base64, mimeType: "audio/pcm;rate=16000" }
-            if (input.audio) {
-                message.realtimeInput.audio = {
-                    data: input.audio.data,
-                    mimeType: input.audio.mimeType || 'audio/pcm;rate=16000',
-                };
-                this.logger.debug(`Sending audio chunk (${input.audio.data.length} chars base64)`);
-            }
-
-            // Video input - Blob format: { data: base64, mimeType: "image/jpeg" }
-            if (input.video) {
-                message.realtimeInput.video = {
-                    data: input.video.data,
-                    mimeType: input.video.mimeType || 'image/jpeg',
-                };
-                this.logger.debug(`Sending video frame`);
-            }
-
-            // Text input - direct string
-            if (input.text) {
-                message.realtimeInput.text = input.text;
-                this.logger.debug(`Sending text: ${input.text.substring(0, 50)}...`);
-            }
-
-            // Activity signals (when manual VAD)
-            if (input.activityStart) {
-                message.realtimeInput.activityStart = {};
-                this.logger.debug(`Sending activityStart`);
-            }
-            if (input.activityEnd) {
-                message.realtimeInput.activityEnd = {};
-                this.logger.debug(`Sending activityEnd`);
-            }
-
-            // Audio stream end (when mic paused)
-            if (input.audioStreamEnd) {
-                message.realtimeInput.audioStreamEnd = true;
-                this.logger.debug(`Sending audioStreamEnd`);
-            }
-
-            session.geminiWs.send(JSON.stringify(message));
-
-        } catch (error) {
-            this.logger.error(`Failed to send realtimeInput: ${error}`);
-            client.emit('error', {
-                code: 'SEND_FAILED',
-                message: 'Failed to send input',
-            });
+    private sendToClient(client: WebSocket, message: object) {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(message));
         }
     }
 
-    /**
-     * Handle audio stream end signal
-     */
-    @SubscribeMessage('audioStreamEnd')
-    handleAudioStreamEnd(@ConnectedSocket() client: Socket) {
-        const session = this.sessions.get(client.id);
-
-        if (!session?.geminiWs || session.geminiWs.readyState !== WebSocket.OPEN) {
-            return;
-        }
-
-        try {
-            const message = {
-                realtimeInput: {
-                    audioStreamEnd: true,
-                },
-            };
-            session.geminiWs.send(JSON.stringify(message));
-            this.logger.debug(`Audio stream end sent for ${client.id}`);
-        } catch (error) {
-            this.logger.error(`Failed to send audioStreamEnd: ${error}`);
-        }
-    }
-
-    /**
-     * Handle client content (text messages, conversation turns)
-     * 
-     * BidiGenerateContentClientContent format:
-     * - turns: array of content turns or simple string
-     * - turnComplete: boolean
-     */
-    @SubscribeMessage('clientContent')
-    handleClientContent(
-        @ConnectedSocket() client: Socket,
-        @MessageBody() payload: any,
-    ) {
-        const session = this.sessions.get(client.id);
-
-        if (!session?.geminiWs || session.geminiWs.readyState !== WebSocket.OPEN) {
-            client.emit('error', {
-                code: 'NOT_CONNECTED',
-                message: 'Not connected to Gemini',
-            });
-            return;
-        }
-
-        if (!session.isSetupComplete) {
-            client.emit('error', {
-                code: 'SETUP_NOT_COMPLETE',
-                message: 'Setup not complete',
-            });
-            return;
-        }
-
-        try {
-            let message: any;
-
-            // Handle different input formats
-            if (payload.clientContent) {
-                message = { clientContent: payload.clientContent };
-            } else if (typeof payload.turns === 'string') {
-                // Simple text message
-                message = {
-                    clientContent: {
-                        turns: payload.turns,
-                        turnComplete: payload.turnComplete ?? true,
-                    },
-                };
-            } else {
-                message = { clientContent: payload };
-            }
-
-            this.logger.debug(`Sending clientContent for ${client.id}`);
-            session.geminiWs.send(JSON.stringify(message));
-
-        } catch (error) {
-            this.logger.error(`Failed to send clientContent: ${error}`);
-            client.emit('error', {
-                code: 'SEND_FAILED',
-                message: 'Failed to send content',
-            });
-        }
-    }
-
-    /**
-     * Handle tool response
-     * 
-     * BidiGenerateContentToolResponse format:
-     * - functionResponses: array of { id, name, response }
-     */
-    @SubscribeMessage('toolResponse')
-    handleToolResponse(
-        @ConnectedSocket() client: Socket,
-        @MessageBody() payload: any,
-    ) {
-        const session = this.sessions.get(client.id);
-
-        if (!session?.geminiWs || session.geminiWs.readyState !== WebSocket.OPEN) {
-            client.emit('error', {
-                code: 'NOT_CONNECTED',
-                message: 'Not connected to Gemini',
-            });
-            return;
-        }
-
-        try {
-            const response = payload.toolResponse || payload;
-
-            const message = {
-                toolResponse: {
-                    functionResponses: response.functionResponses,
-                },
-            };
-
-            this.logger.log(`Sending tool response for ${client.id}`);
-            session.geminiWs.send(JSON.stringify(message));
-
-        } catch (error) {
-            this.logger.error(`Failed to send toolResponse: ${error}`);
-            client.emit('error', {
-                code: 'SEND_FAILED',
-                message: 'Failed to send tool response',
-            });
-        }
-    }
-
-    /**
-     * Get session status
-     */
-    @SubscribeMessage('getStatus')
-    handleGetStatus(@ConnectedSocket() client: Socket) {
-        const session = this.sessions.get(client.id);
-
-        client.emit('status', {
-            connected: session?.geminiWs?.readyState === WebSocket.OPEN,
-            setupComplete: session?.isSetupComplete || false,
-            model: session?.model,
-            sessionHandle: session?.sessionHandle,
-        });
+    private sendError(client: WebSocket, message: string) {
+        this.sendToClient(client, { type: 'error', data: { message } });
     }
 }

@@ -14,6 +14,7 @@ import { GeminiMusicService } from './services/gemini-music.service';
 import { TtsService } from './services/tts.service';
 import { ContextPromptService } from './services/context-prompt.service';
 import { LiveApiGateway } from './gateways/live-api.gateway';
+import { LiveApiService } from './services/live-api.service';
 
 /**
  * Gemini API Module
@@ -34,6 +35,7 @@ import { LiveApiGateway } from './gateways/live-api.gateway';
         TtsService,
         ContextPromptService,
         LiveApiGateway,
+        LiveApiService,
     ],
     exports: [
         GeminiApiConfigService,
@@ -44,7 +46,9 @@ import { LiveApiGateway } from './gateways/live-api.gateway';
         GeminiVideoService,
         GeminiMusicService,
         TtsService,
+        TtsService,
         ContextPromptService,
+        LiveApiService,
     ],
 })
 export class GeminiApiModule { }
