@@ -368,25 +368,27 @@ export class LiveApiGateway implements OnGatewayConnection, OnGatewayDisconnect 
             const input = payload.realtimeInput || payload;
 
             // Build message per BidiGenerateContentRealtimeInput spec
+            // Uses mediaChunks array for audio/video data
             const message: any = { realtimeInput: {} };
 
-            // Audio input - MUST be PCM 16kHz
+            // Audio input - using mediaChunks format (correct per Gemini API spec)
             if (input.audio) {
-                message.realtimeInput.audio = {
-                    data: input.audio.data,
+                message.realtimeInput.mediaChunks = [{
                     mimeType: input.audio.mimeType || 'audio/pcm;rate=16000',
-                };
+                    data: input.audio.data,
+                }];
             }
 
-            // Video input - JPEG frames
+            // Video input - using mediaChunks format
             if (input.video) {
-                message.realtimeInput.video = {
-                    data: input.video.data,
+                message.realtimeInput.mediaChunks = message.realtimeInput.mediaChunks || [];
+                message.realtimeInput.mediaChunks.push({
                     mimeType: input.video.mimeType || 'image/jpeg',
-                };
+                    data: input.video.data,
+                });
             }
 
-            // Text input
+            // Text input - direct format
             if (input.text) {
                 message.realtimeInput.text = input.text;
             }
